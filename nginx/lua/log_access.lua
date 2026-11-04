@@ -21,6 +21,7 @@ end
 -- 组装日志JSON字符串
 local now = ngx.now()
 local log_obj = {
+    request_id = ngx.ctx.request_id,
     ts = now,
     ip = ngx.var.remote_addr,
     api_key = ngx.var.http_x_api_key or "",
