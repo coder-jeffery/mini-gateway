@@ -18,5 +18,39 @@ curl -H "X-Api-Key: abc123" http://127.0.0.1:8080
 docker exec -it gw-redis redis-cli SET apikey:abc123 1
 curl -H "X-Api-Key: abc123" http://127.0.0.1:8080
 
+压测：
+wrk -t2 -c20 -d10s -H "X-Api-Key: abc123" http://127.0.0.1:8080
+
+添加白名单限制：
+    docker exec -it gw-redis redis-cli
+    SADD whitelist:ip 127.0.0.1
+
+
+# 添加白名单IP
+SADD whitelist:ip 127.0.0.1
+# 删除白名单IP
+SREM whitelist:ip 127.0.0.1
+# 查看所有白名单
+SMEMBERS whitelist:ip
+
+动态配额：  HSET apikey:meta:abc123 limit 20 window 30  # api key 30 秒最多允许 20 次请求
+
+
+# 1. 标记apikey合法（原有）
+SET apikey:abc123 1
+
+# 2. 设置该apikey独立配额：30s最多20次
+HSET apikey:meta:abc123 limit 20 window 30
+
+# 给另一个key不同配额：60s最多5次
+SET apikey:xyz789 1
+HSET apikey:meta:xyz789 limit 5 window 60
+
+# 白名单ip
+SADD whitelist:ip 127.0.0.1
+
+# 查看配额
+HGETALL apikey:meta:abc123
+
 
 

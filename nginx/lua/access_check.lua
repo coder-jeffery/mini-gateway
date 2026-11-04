@@ -1,10 +1,18 @@
+-- ✅ APIKey 鉴权
+-- ✅ Redis 动态配额（每个 key 独立 limit/window）
+-- ✅ IP 白名单
+-- ✅ ZSet 滑动窗口限流 + pipeline
+-- ✅ 标准 `X-RateLimit-*` + Retry-After
+-- ✅ Redis 故障熔断开关（pass/reject）
 
 local redis_util = require "redis_util"
 local ngx = ngx
 
--- 配置：单IP 60s最多10次
-local RATE_LIMIT = 10
-local RATE_WINDOW = 60
+-- ========= 熔断配置在这里切换 =========
+-- local CIRCUIT_BREAK_POLICY = "reject"  -- Redis异常，全部拒绝（返回503）
+local CIRCUIT_BREAK_POLICY = "pass"     -- Redis异常，直接放行，跳过鉴权+限流
+local DEFAULT_RATE_LIMIT = 10
+local DEFAULT_RATE_WINDOW = 60
 
 local function deny(status, msg)
     ngx.status = status
@@ -13,60 +21,108 @@ local function deny(status, msg)
     return ngx.exit(status)
 end
 
--- 1. 读取 ApiKey
+-- 熔断处理函数
+local function handle_circuit_break()
+    print("熔断处理>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    ngx.header["X-Redis-Circuit-Break"] = "true"
+    if CIRCUIT_BREAK_POLICY == "reject" then
+        return deny(503, "circuit break: redis unavailable")
+    else
+        -- pass模式：放行，跳过鉴权、限流逻辑
+        ngx.header["X-RateLimit-Limit"] = DEFAULT_RATE_LIMIT
+        ngx.header["X-RateLimit-Remaining"] = -1
+        ngx.header["X-RateLimit-Reset"] = math.ceil(ngx.now() + DEFAULT_RATE_WINDOW)
+        return
+    end
+end
+
+-- 读取 ApiKey
 local api_key = ngx.var.http_x_api_key
 if not api_key or api_key == "" then
     return deny(401, "missing X-Api-Key header")
 end
 
--- 2. 获取客户端真实IP
+-- 客户端IP
 local ip = ngx.var.remote_addr
 
 local red, err = redis_util.new()
 if not red then
     ngx.log(ngx.ERR, "redis connect fail: ", err)
-    return deny(500, "redis service unavailable")
+    return handle_circuit_break()
 end
 
--- 校验 API Key
+-- 校验 apikey 是否合法
 local key_exist, err = red:exists("apikey:" .. api_key)
 if err then
     redis_util.close(red)
     ngx.log(ngx.ERR, "redis exists err: ", err)
-    return deny(500, "redis error")
+    return handle_circuit_break()
 end
 if key_exist ~= 1 then
     redis_util.close(red)
     return deny(401, "invalid api key")
 end
 
--- ========== 滑动窗口限流（ZSet） ==========
-local now = ngx.now() -- 浮点数，单位秒
-local window_start = now - RATE_WINDOW
-local limit_key = "ratelimit:sw:ip:" .. ip
-
--- 清理窗口之前的旧记录
-red:zremrangebyscore(limit_key, 0, window_start)
-
--- 统计当前窗口内请求数量
-local cnt, err = red:zcard(limit_key)
+-- 读取该 apikey 的动态配额
+local meta_key = "apikey:meta:" .. api_key
+local meta, err = red:hmget(meta_key, "limit", "window")
 if err then
     redis_util.close(red)
-    ngx.log(ngx.ERR, "zcard err: ", err)
-    return deny(500, "redis error")
+    ngx.log(ngx.ERR, "hmget meta err: ", err)
+    return handle_circuit_break()
+end
+local rate_limit  = tonumber(meta[1]) or DEFAULT_RATE_LIMIT
+local rate_window = tonumber(meta[2]) or DEFAULT_RATE_WINDOW
+
+-- IP白名单判断
+local in_whitelist, err = red:sismember("whitelist:ip", ip)
+if err then
+    redis_util.close(red)
+    ngx.log(ngx.ERR, "sismember err: ", err)
+    return handle_circuit_break()
 end
 
-if cnt >= RATE_LIMIT then
+if in_whitelist == 1 then
     redis_util.close(red)
+    ngx.header["X-RateLimit-Whitelist"] = "true"
+    ngx.header["X-RateLimit-Limit"] = rate_limit
+    ngx.header["X-RateLimit-Remaining"] = -1
+    ngx.header["X-RateLimit-Reset"] = math.ceil(ngx.now() + rate_window)
+    return
+end
+
+-- ========= 滑动窗口限流 pipeline =========
+local now = ngx.now()
+local window_start = now - rate_window
+local limit_key = "ratelimit:sw:key:" .. api_key
+local unique_id = now .. ":" .. ngx.var.pid .. ":" .. math.random()
+
+red:init_pipeline()
+red:zremrangebyscore(limit_key, 0, window_start)
+red:zcard(limit_key)
+red:zadd(limit_key, now, unique_id)
+red:expire(limit_key, rate_window + 10)
+local res, err = red:commit_pipeline()
+if not res then
+    redis_util.close(red)
+    ngx.log(ngx.ERR, "pipeline err: ", err)
+    return handle_circuit_break()
+end
+
+local cnt = res[2]
+local remaining = rate_limit - cnt
+local reset_ts = math.ceil(now + rate_window)
+
+ngx.header["X-RateLimit-Limit"] = rate_limit
+ngx.header["X-RateLimit-Remaining"] = math.max(0, remaining)
+ngx.header["X-RateLimit-Reset"] = reset_ts
+
+if cnt >= rate_limit then
+    print("限流处理>>>>>>>>>>>>>>>>>>>>>>>>>>>> IP:  ", limit_key)
+    redis_util.close(red)
+    ngx.header["Retry-After"] = reset_ts - math.ceil(ngx.now())
     return deny(429, "too many requests, rate limited")
 end
 
--- 插入本次请求记录；member要唯一，防止zset去重吞请求
-local unique_id = now .. ":" .. ngx.var.pid .. ":" .. math.random()
-red:zadd(limit_key, now, unique_id)
--- zset整体过期，防止长期堆积冷key（自动清理兜底）
-red:expire(limit_key, RATE_WINDOW + 10)
-
 redis_util.close(red)
--- 全部校验通过，放行
 return
