@@ -17,7 +17,7 @@ services:
     depends_on:
       - redis
     environment:
-      ADMIN_WHITELIST_IP: ${ADMIN_WHITELIST_IP:-192.168.65.1}
+      ADMIN_WHITELIST_IPS: ${ADMIN_WHITELIST_IPS:-127.0.0.1,172.17.0.1,192.168.65.1}
     volumes:
       - ./redis/init-admin-whitelist.sh:/init-admin-whitelist.sh:ro
     entrypoint: ["/bin/sh", "/init-admin-whitelist.sh"]

@@ -8,8 +8,8 @@ Intro:
 6. Configure cosocket timeouts so a slow Redis does not block workers.
 
 ```bash
-cd gateway
-docker compose up -d
+cd mini-gateway
+./start.sh
 ```
 
 Option 1:
@@ -68,3 +68,9 @@ View access logs:
 docker exec -it gw-redis redis-cli
 LRANGE gateway:access_log -10 -1
 ```
+
+
+docker exec -it gw-redis redis-cli SMEMBERS admin:whitelist:ip
+
+ADMIN_WHITELIST_IP=127.0.0.1 docker compose up -d
+
