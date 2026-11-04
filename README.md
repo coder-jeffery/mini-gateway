@@ -12,9 +12,25 @@ cd mini-gateway
 ./start.sh
 ```
 
+### Storage (`GATEWAY_STORAGE`)
+
+| Value | Description |
+|-------|-------------|
+| `memory` | **Default.** `lua_shared_dict` in OpenResty (fast, not persisted across container recreate) |
+| `redis` | Redis + `redis-init` bootstrap ( `./start.sh` with `GATEWAY_STORAGE=redis` ) |
+| `sqlite` | File DB at `./data/gateway.db` (persisted volume, needs `openresty/Dockerfile` build) |
+
+```bash
+GATEWAY_STORAGE=memory ./start.sh
+GATEWAY_STORAGE=redis ./start.sh
+GATEWAY_STORAGE=sqlite ./start.sh
+```
+
+Default credentials after bootstrap: API key `mini-key`, admin Bearer token `mini-token`.
+
 Option 1:
 ```bash
-curl -H "X-Api-Key: abc123" http://127.0.0.1:8080
+curl -H "X-Api-Key: mini-key" http://127.0.0.1:8080
 ```
 
 Option 2:
@@ -74,3 +90,26 @@ docker exec -it gw-redis redis-cli SMEMBERS admin:whitelist:ip
 
 ADMIN_WHITELIST_IP=127.0.0.1 docker compose up -d
 
+--
+
+GATEWAY_STORAGE=sqlite ./start.sh
+echo $?   # 应为 0
+curl -H "X-Api-Key: mini-key" http://127.0.0.1:8080/
+ls -la ./data/gateway.db
+
+--
+START_VERBOSE=1 GATEWAY_STORAGE=sqlite ./start.sh
+
+--
+docker logs gw-openresty
+
+--
+start:
+
+./start.sh                                    # memory（默认，不启 Redis）
+GATEWAY_STORAGE=redis ./start.sh              # Redis + redis-init
+GATEWAY_STORAGE=sqlite ./start.sh             # SQLite 落盘 ./data/
+
+--
+curl -i http://127.0.0.1:8080/                              # 401
+curl -i -H "X-Api-Key: mini-key" http://127.0.0.1:8080/     # 200

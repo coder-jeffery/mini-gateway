@@ -1,11 +1,12 @@
 
 local redis = require "resty.redis"
+local config = require "gateway_config"
 local _M = {}
 
 function _M.new()
     local r = redis:new()
     r:set_timeouts(500, 500, 500)
-    local ok, err = r:connect("redis", 6379)
+    local ok, err = r:connect(config.redis_host(), config.redis_port())
     if not ok then
         return nil, "redis connect fail: " .. err
     end

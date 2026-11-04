@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   redis:
+    profiles: ["redis"]
     image: redis:7-alpine
     container_name: gw-redis
     ports:
@@ -11,29 +12,42 @@ services:
     command: redis-server /etc/redis/redis.conf
     restart: always
 
-  # Seed default admin IP whitelist on compose up (SADD is idempotent)
   redis-init:
+    profiles: ["redis"]
     image: redis:7-alpine
     depends_on:
       - redis
     environment:
       ADMIN_WHITELIST_IPS: ${ADMIN_WHITELIST_IPS:-127.0.0.1,172.17.0.1,192.168.65.1}
+      DEFAULT_API_KEY: ${DEFAULT_API_KEY:-mini-key}
+      DEFAULT_API_KEY_LIMIT: ${DEFAULT_API_KEY_LIMIT:-1000}
+      DEFAULT_API_KEY_WINDOW: ${DEFAULT_API_KEY_WINDOW:-60}
+      DEFAULT_ADMIN_TOKEN: ${DEFAULT_ADMIN_TOKEN:-mini-token}
     volumes:
-      - ./redis/init-admin-whitelist.sh:/init-admin-whitelist.sh:ro
-    entrypoint: ["/bin/sh", "/init-admin-whitelist.sh"]
+      - ./redis/bootstrap-gateway.sh:/bootstrap-gateway.sh:ro
+    entrypoint: ["/bin/sh", "/bootstrap-gateway.sh"]
     restart: "no"
 
   openresty:
-    image: openresty/openresty:alpine-fat
+    build:
+      context: ./openresty
+      dockerfile: Dockerfile
+    image: gw-openresty:local
     container_name: gw-openresty
     ports:
       - "8080:8080"
+    environment:
+      GATEWAY_STORAGE: ${GATEWAY_STORAGE:-memory}
+      GATEWAY_SQLITE_PATH: ${GATEWAY_SQLITE_PATH:-/var/lib/gateway/gateway.db}
+      GATEWAY_REDIS_HOST: ${GATEWAY_REDIS_HOST:-redis}
+      GATEWAY_REDIS_PORT: ${GATEWAY_REDIS_PORT:-6379}
+      ADMIN_WHITELIST_IPS: ${ADMIN_WHITELIST_IPS:-127.0.0.1,172.17.0.1,192.168.65.1}
+      DEFAULT_API_KEY: ${DEFAULT_API_KEY:-mini-key}
+      DEFAULT_API_KEY_LIMIT: ${DEFAULT_API_KEY_LIMIT:-1000}
+      DEFAULT_API_KEY_WINDOW: ${DEFAULT_API_KEY_WINDOW:-60}
+      DEFAULT_ADMIN_TOKEN: ${DEFAULT_ADMIN_TOKEN:-mini-token}
     volumes:
       - ./nginx/conf/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
       - ./nginx/lua:/usr/local/openresty/nginx/lua:ro
-    depends_on:
-      redis:
-        condition: service_started
-      redis-init:
-        condition: service_completed_successfully
+      - ./data:/var/lib/gateway
     restart: always
