@@ -53,4 +53,10 @@ SADD whitelist:ip 127.0.0.1
 HGETALL apikey:meta:abc123
 
 
+<!-- 查看日志 -->
+docker exec -it gw-redis redis-cli
+# 看最后10条日志
+LRANGE gateway:access_log -10 -1
+
+
 
