@@ -1,7 +1,7 @@
 local redis_util = require "redis_util"
 local ngx = ngx
 
--- 配置：单IP 60s最多10次
+-- Config: 10 requests per IP per 60s
 local RATE_LIMIT = 10
 local RATE_WINDOW = 60
 
@@ -12,13 +12,13 @@ local function deny(status, msg)
     return ngx.exit(status)
 end
 
--- 1. 读取 ApiKey
+-- 1. Read API key
 local api_key = ngx.var.http_x_api_key
 if not api_key or api_key == "" then
     return deny(401, "missing X-Api-Key header")
 end
 
--- 2. 获取客户端真实IP
+-- 2. Client IP
 local ip = ngx.var.remote_addr
 
 local red, err = redis_util.new()
@@ -27,7 +27,7 @@ if not red then
     return deny(500, "redis service unavailable")
 end
 
--- 校验 API Key
+-- Validate API key
 local key_exist, err = red:exists("apikey:" .. api_key)
 if err then
     redis_util.close(red)
@@ -40,15 +40,15 @@ if key_exist ~= 1 then
 end
 
 
--- 方式一 ========== 滑动窗口限流（ZSet） ==========
--- local now = ngx.now() -- 浮点数，单位秒
+-- Option A: sliding window (ZSet), non-pipeline
+-- local now = ngx.now() -- float seconds
 -- local window_start = now - RATE_WINDOW
 -- local limit_key = "ratelimit:sw:ip:" .. ip
 
--- -- 清理窗口之前的旧记录
+-- -- Trim entries outside the window
 -- red:zremrangebyscore(limit_key, 0, window_start)
 
--- -- 统计当前窗口内请求数量
+-- -- Count requests in current window
 -- local cnt, err = red:zcard(limit_key)
 -- if err then
 --     redis_util.close(red)
@@ -61,7 +61,7 @@ end
 --     return deny(429, "too many requests, rate limited")
 -- end
 
--- 方式二 ========== Pipeline 滑动窗口限流 ==========
+-- Option B: sliding window via pipeline
 local now = ngx.now()
 local window_start = now - RATE_WINDOW
 local limit_key = "ratelimit:sw:ip:" .. ip
@@ -88,12 +88,12 @@ if cnt >= RATE_LIMIT then
     return deny(429, "too many requests, rate limited")
 end
 
--- 插入本次请求记录；member要唯一，防止zset去重吞请求
+-- Record this request; unique member avoids ZSet dedup dropping counts
 local unique_id = now .. ":" .. ngx.var.pid .. ":" .. math.random()
 red:zadd(limit_key, now, unique_id)
--- zset整体过期，防止长期堆积冷key（自动清理兜底）
+-- Key TTL to avoid stale ZSet growth
 red:expire(limit_key, RATE_WINDOW + 10)
 
 redis_util.close(red)
--- 全部校验通过，放行
+-- All checks passed
 return

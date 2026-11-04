@@ -1,10 +1,10 @@
-
 local redis_util = require "redis_util"
 local cjson = require "cjson"
 local ngx = ngx
+local hmac = require "resty.hmac"
 
--- ========= 管理员密钥，调用接口必须传这个 =========
 local ADMIN_SECRET = "admin-secret-2026"
+local SIGN_WINDOW = 60 -- signature timestamp tolerance (seconds)
 
 local function resp(code, data)
     ngx.status = code
@@ -13,7 +13,6 @@ local function resp(code, data)
     return ngx.exit(code)
 end
 
--- 读取 body
 ngx.req.read_body()
 local body = ngx.req.get_body_data()
 if not body then
@@ -24,21 +23,17 @@ if not req then
     return resp(400, {ok=false, msg="invalid json"})
 end
 
-
 local client_ip = ngx.var.remote_addr
-
 local red, err = redis_util.new()
 if not red then
     ngx.log(ngx.ERR, "redis connect err: ", err)
     return resp(500, {ok=false, msg="redis error"})
 end
 
-
--- ========= 管理接口独立运维IP白名单校验 =========
+-- Layer 1: admin IP whitelist
 local in_admin_whitelist, err = red:sismember("admin:whitelist:ip", client_ip)
 if err then
     redis_util.close(red)
-    ngx.log(ngx.ERR, "admin whitelist sismember err: ", err)
     return resp(500, {ok=false, msg="redis error"})
 end
 if in_admin_whitelist ~= 1 then
@@ -46,11 +41,50 @@ if in_admin_whitelist ~= 1 then
     return resp(403, {ok=false, msg="forbidden: ip not in admin whitelist"})
 end
 
-
--- 校验管理密钥
-if req.admin_secret ~= ADMIN_SECRET then
-    return resp(403, {ok=false, msg="admin secret invalid"})
+-- Layer 2: HMAC signature (replaces plain admin_secret comparison)
+local ts = tonumber(req.ts)
+local nonce = req.nonce
+local sign = req.sign
+if not ts or not nonce or not sign then
+    redis_util.close(red)
+    return resp(400, {ok=false, msg="missing sign params: ts, nonce, sign"})
 end
+local now = ngx.now()
+if math.abs(now - ts) > SIGN_WINDOW then
+    redis_util.close(red)
+    return resp(403, {ok=false, msg="signature expired"})
+end
+
+-- Replay protection: reject reused nonce
+local nonce_key = "admin:nonce:" .. nonce
+local exists, err = red:exists(nonce_key)
+if err then
+    redis_util.close(red)
+    return resp(500, {ok=false, msg="redis error"})
+end
+if exists == 1 then
+    redis_util.close(red)
+    return resp(403, {ok=false, msg="nonce reused, replay attack"})
+end
+
+-- Server-side sign; match Python hmac.hexdigest() via final(..., true) for hex
+local raw = tostring(ts) .. ":" .. tostring(nonce)
+local h = hmac:new(ADMIN_SECRET, hmac.ALGOS.SHA256)
+if not h then
+    redis_util.close(red)
+    return resp(500, {ok=false, msg="hmac init failed"})
+end
+if not h:update(raw) then
+    redis_util.close(red)
+    return resp(500, {ok=false, msg="hmac update failed"})
+end
+local calc_sign = h:final(nil, true)
+if not calc_sign or calc_sign ~= sign then
+    redis_util.close(red)
+    return resp(403, {ok=false, msg="invalid signature"})
+end
+-- Mark nonce used with TTL
+red:setex(nonce_key, SIGN_WINDOW, "1")
 
 local action = req.action
 if not action then
@@ -58,16 +92,7 @@ if not action then
     return resp(400, {ok=false, msg="missing action"})
 end
 
-
-local red, err = redis_util.new()
-if not red then
-    ngx.log(ngx.ERR, "redis connect err: ", err)
-    return resp(500, {ok=false, msg="redis error"})
-end
-
--- ===================== Action 分支 =====================
 if action == "upsert_apikey" then
-    -- 新增/更新 apikey
     local api_key = req.api_key
     local limit = tonumber(req.limit)
     local window = tonumber(req.window)
@@ -99,7 +124,7 @@ elseif action == "whitelist_add" then
     end
     red:sadd("whitelist:ip", ip)
     redis_util.close(red)
-    return resp(200, {ok=true, msg="ip added to whitelist"})
+    return resp(200, {ok=true, msg="ip added to business whitelist"})
 
 elseif action == "whitelist_del" then
     local ip = req.ip
@@ -109,7 +134,7 @@ elseif action == "whitelist_del" then
     end
     red:srem("whitelist:ip", ip)
     redis_util.close(red)
-    return resp(200, {ok=true, msg="ip removed from whitelist"})
+    return resp(200, {ok=true, msg="ip removed from business whitelist"})
 
 elseif action == "whitelist_list" then
     local ips, err = red:smembers("whitelist:ip")
@@ -118,6 +143,34 @@ elseif action == "whitelist_list" then
         return resp(500, {ok=false, msg="redis error"})
     end
     return resp(200, {ok=true, whitelist=ips})
+
+elseif action == "admin_whitelist_add" then
+    local ip = req.ip
+    if not ip then
+        redis_util.close(red)
+        return resp(400, {ok=false, msg="need ip"})
+    end
+    red:sadd("admin:whitelist:ip", ip)
+    redis_util.close(red)
+    return resp(200, {ok=true, msg="ip added to admin whitelist"})
+
+elseif action == "admin_whitelist_del" then
+    local ip = req.ip
+    if not ip then
+        redis_util.close(red)
+        return resp(400, {ok=false, msg="need ip"})
+    end
+    red:srem("admin:whitelist:ip", ip)
+    redis_util.close(red)
+    return resp(200, {ok=true, msg="ip removed from admin whitelist"})
+
+elseif action == "admin_whitelist_list" then
+    local ips, err = red:smembers("admin:whitelist:ip")
+    redis_util.close(red)
+    if err then
+        return resp(500, {ok=false, msg="redis error"})
+    end
+    return resp(200, {ok=true, admin_whitelist=ips})
 
 else
     redis_util.close(red)

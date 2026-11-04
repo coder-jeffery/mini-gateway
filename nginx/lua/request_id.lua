@@ -10,7 +10,7 @@ local function fallback_id()
     )
 end
 
--- OpenResty 无 resty.uuid；用 lua-resty-core 自带的 random + string 生成 UUID v4
+-- No bundled resty.uuid; UUID v4 via lua-resty-core random + string
 local function uuid_v4()
     local ok_random, random = pcall(require, "resty.random")
     local ok_str, str = pcall(require, "resty.string")

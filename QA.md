@@ -1,10 +1,12 @@
-为什么日志上报要放在 `log_by_lua` + `ngx.timer.at`？
+Why use `log_by_lua` + `ngx.timer.at` for access logs?
 
-1. `access_by_lua` 是请求前置校验；`log_by_lua` 是请求生命周期后置钩子，**响应已经发给客户端**，适合审计、埋点、统计
-2. 如果直接在 log_by_lua 里面同步 Redis 请求：Redis 慢会拖慢整个请求；`ngx.timer.at(0)` 把任务脱离当前请求协程，异步后台执行，**零延迟影响用户**
-3. 坑：timer 回调不能直接捕获 `ngx.ctx`，请求协程销毁后 ctx 失效，必须提前序列化 / 拷贝数据传参
+1. `access_by_lua` runs before the upstream; `log_by_lua` runs after the response is sent—good for audit and metrics.
+2. Sync Redis in `log_by_lua` would add latency; `ngx.timer.at(0)` runs off the request coroutine with no user-facing delay.
+3. Pitfall: timer callbacks cannot rely on `ngx.ctx` after the request ends—serialize data before scheduling the timer.
 
-1. 日志加 `request_id`：在 rewrite_by_lua 生成 uuid 放到 ngx.var，透传到上游、日志，方便链路追踪
-2. 日志改成写入 Redis Stream（`XADD`），比 list 更适合消费程序拉取（有消费组、ack 机制）
-3. 增加定时器数量保护：`lua_max_pending_timers`，防止突发流量创建海量 timer
-4. 日志采样：高 QPS 时只采样一部分请求上报，降低 Redis 压力
+Improvements:
+
+1. Add `request_id` in `rewrite_by_lua`, store in `ngx.var`, forward to upstream and logs.
+2. Use Redis Stream (`XADD`) instead of a list for consumer groups and acks.
+3. Set `lua_max_pending_timers` to cap timer growth under load.
+4. Sample logs at high QPS to reduce Redis pressure.

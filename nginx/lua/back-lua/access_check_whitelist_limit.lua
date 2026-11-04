@@ -2,7 +2,7 @@
 local redis_util = require "redis_util"
 local ngx = ngx
 
--- 兜底默认配额：meta读取失败、字段缺失时使用
+-- Default quota when meta is missing or invalid
 local DEFAULT_RATE_LIMIT = 10
 local DEFAULT_RATE_WINDOW = 60
 
@@ -13,13 +13,13 @@ local function deny(status, msg)
     return ngx.exit(status)
 end
 
--- 1. 读取 ApiKey
+-- 1. Read API key
 local api_key = ngx.var.http_x_api_key
 if not api_key or api_key == "" then
     return deny(401, "missing X-Api-Key header")
 end
 
--- 2. 获取客户端真实IP
+-- 2. Client IP
 local ip = ngx.var.remote_addr
 
 local red, err = redis_util.new()
@@ -28,7 +28,7 @@ if not red then
     return deny(500, "redis service unavailable")
 end
 
--- 校验 apikey 是否合法（存在）
+-- Validate api key exists
 local key_exist, err = red:exists("apikey:" .. api_key)
 if err then
     redis_util.close(red)
@@ -40,7 +40,7 @@ if key_exist ~= 1 then
     return deny(401, "invalid api key")
 end
 
--- ========== 读取该 apikey 动态配额 meta ==========
+-- Load per-key quota meta
 local meta_key = "apikey:meta:" .. api_key
 local meta, err = red:hmget(meta_key, "limit", "window")
 if err then
@@ -48,11 +48,11 @@ if err then
     ngx.log(ngx.ERR, "hmget meta err: ", err)
     return deny(500, "redis error")
 end
--- hmget 返回数组：meta[1]=limit, meta[2]=window
+-- hmget returns meta[1]=limit, meta[2]=window
 local rate_limit  = tonumber(meta[1]) or DEFAULT_RATE_LIMIT
 local rate_window = tonumber(meta[2]) or DEFAULT_RATE_WINDOW
 
--- ========== IP白名单判断，白名单直接跳过限流 ==========
+-- IP whitelist: skip rate limiting when matched
 local in_whitelist, err = red:sismember("whitelist:ip", ip)
 if err then
     redis_util.close(red)
@@ -65,7 +65,7 @@ if in_whitelist == 1 then
     return
 end
 
--- ========== 滑动窗口限流：维度【按 apikey】 ==========
+-- Sliding-window rate limit keyed by api key
 local now = ngx.now()
 local window_start = now - rate_window
 local limit_key = "ratelimit:sw:key:" .. api_key

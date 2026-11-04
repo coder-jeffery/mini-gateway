@@ -10,7 +10,7 @@ local function log_timer(premature, log_data)
         ngx.log(ngx.ERR, "log redis connect failed: ", err)
         return
     end
-    -- RPUSH 追加日志到 list
+    -- Append log entry to Redis list
     local ok, err = red:rpush("gateway:access_log", log_data)
     redis_util.close(red)
     if not ok then
@@ -18,7 +18,7 @@ local function log_timer(premature, log_data)
     end
 end
 
--- 组装日志JSON字符串
+-- Build JSON log payload
 local now = ngx.now()
 local log_obj = {
     request_id = ngx.ctx.request_id,
@@ -39,10 +39,10 @@ if not log_str then
     return
 end
 
--- 投递异步timer，0=尽快调度
+-- Async timer; 0 = run as soon as possible
 local ok, err = ngx.timer.at(0, log_timer, log_str)
 if not ok then
     ngx.log(ngx.ERR, "create log timer failed: ", err)
 end
 
--- docker exec -it gw-redis redis-cli
+-- docker exec -it gw-redis redis-cli LRANGE gateway:access_log 0 -1

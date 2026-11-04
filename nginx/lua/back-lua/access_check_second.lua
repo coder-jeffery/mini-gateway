@@ -1,7 +1,7 @@
 local redis_util = require "redis_util"
 local ngx = ngx
 
--- 兜底默认配额
+-- Default quota fallback
 local DEFAULT_RATE_LIMIT = 10
 local DEFAULT_RATE_WINDOW = 60
 
@@ -12,13 +12,13 @@ local function deny(status, msg)
     return ngx.exit(status)
 end
 
--- 读取 ApiKey
+-- Read API key
 local api_key = ngx.var.http_x_api_key
 if not api_key or api_key == "" then
     return deny(401, "missing X-Api-Key header")
 end
 
--- 客户端IP
+-- Client IP
 local ip = ngx.var.remote_addr
 
 local red, err = redis_util.new()
@@ -27,7 +27,7 @@ if not red then
     return deny(500, "redis service unavailable")
 end
 
--- 校验 apikey 是否合法
+-- Validate api key exists
 local key_exist, err = red:exists("apikey:" .. api_key)
 if err then
     redis_util.close(red)
@@ -39,7 +39,7 @@ if key_exist ~= 1 then
     return deny(401, "invalid api key")
 end
 
--- 读取该 apikey 的动态配额
+-- Load per-key quota from Redis
 local meta_key = "apikey:meta:" .. api_key
 local meta, err = red:hmget(meta_key, "limit", "window")
 if err then
@@ -50,7 +50,7 @@ end
 local rate_limit  = tonumber(meta[1]) or DEFAULT_RATE_LIMIT
 local rate_window = tonumber(meta[2]) or DEFAULT_RATE_WINDOW
 
--- IP白名单判断
+-- Business IP whitelist
 local in_whitelist, err = red:sismember("whitelist:ip", ip)
 if err then
     redis_util.close(red)
@@ -61,14 +61,14 @@ end
 if in_whitelist == 1 then
     redis_util.close(red)
     ngx.header["X-RateLimit-Whitelist"] = "true"
-    -- 白名单也返回限流头，limit=rate_limit，remaining=无限，这里约定 remaining=-1
+    -- Whitelist still returns rate headers; remaining=-1 means unlimited
     ngx.header["X-RateLimit-Limit"] = rate_limit
     ngx.header["X-RateLimit-Remaining"] = -1
     ngx.header["X-RateLimit-Reset"] = math.ceil(ngx.now() + rate_window)
     return
 end
 
--- ========= 滑动窗口限流 pipeline =========
+-- Sliding-window rate limit (pipeline)
 local now = ngx.now()
 local window_start = now - rate_window
 local limit_key = "ratelimit:sw:key:" .. api_key
@@ -90,7 +90,7 @@ local cnt = res[2]
 local remaining = rate_limit - cnt
 local reset_ts = math.ceil(now + rate_window)
 
--- 标准限流响应头
+-- Standard rate limit response headers
 ngx.header["X-RateLimit-Limit"] = rate_limit
 ngx.header["X-RateLimit-Remaining"] = math.max(0, remaining)
 ngx.header["X-RateLimit-Reset"] = reset_ts

@@ -12,9 +12,9 @@ function _M.new()
     return r
 end
 
--- 归还连接到连接池
+-- Return connection to the pool
 function _M.close(red)
-    -- 保持连接池，keepalive 60s，最多100个空闲连接
+    -- keepalive 60s, up to 100 idle connections
     local ok, err = red:set_keepalive(60000, 100)
     if not ok then
         red:close()

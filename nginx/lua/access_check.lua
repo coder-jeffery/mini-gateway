@@ -1,16 +1,16 @@
--- ✅ APIKey 鉴权
--- ✅ Redis 动态配额（每个 key 独立 limit/window）
--- ✅ IP 白名单
--- ✅ ZSet 滑动窗口限流 + pipeline
--- ✅ 标准 `X-RateLimit-*` + Retry-After
--- ✅ Redis 故障熔断开关（pass/reject）
+-- API key authentication
+-- Per-key dynamic quota in Redis (limit/window)
+-- IP whitelist
+-- ZSet sliding-window rate limit + pipeline
+-- Standard X-RateLimit-* + Retry-After
+-- Redis failure circuit breaker (pass/reject)
 
 local redis_util = require "redis_util"
 local ngx = ngx
 
--- ========= 熔断配置在这里切换 =========
--- local CIRCUIT_BREAK_POLICY = "reject"  -- Redis异常，全部拒绝（返回503）
-local CIRCUIT_BREAK_POLICY = "pass"     -- Redis异常，直接放行，跳过鉴权+限流
+-- Toggle circuit breaker policy here
+-- local CIRCUIT_BREAK_POLICY = "reject"  -- reject all when Redis is down (503)
+local CIRCUIT_BREAK_POLICY = "pass"     -- bypass auth and rate limit when Redis is down
 local DEFAULT_RATE_LIMIT = 10
 local DEFAULT_RATE_WINDOW = 60
 
@@ -21,14 +21,13 @@ local function deny(status, msg)
     return ngx.exit(status)
 end
 
--- 熔断处理函数
 local function handle_circuit_break()
-    print("熔断处理>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    print("circuit break >>>>>>>>>>>>>>>>>>>>>>>>>>>>")
     ngx.header["X-Redis-Circuit-Break"] = "true"
     if CIRCUIT_BREAK_POLICY == "reject" then
         return deny(503, "circuit break: redis unavailable")
     else
-        -- pass模式：放行，跳过鉴权、限流逻辑
+        -- pass: skip auth and rate limiting
         ngx.header["X-RateLimit-Limit"] = DEFAULT_RATE_LIMIT
         ngx.header["X-RateLimit-Remaining"] = -1
         ngx.header["X-RateLimit-Reset"] = math.ceil(ngx.now() + DEFAULT_RATE_WINDOW)
@@ -36,13 +35,11 @@ local function handle_circuit_break()
     end
 end
 
--- 读取 ApiKey
 local api_key = ngx.var.http_x_api_key
 if not api_key or api_key == "" then
     return deny(401, "missing X-Api-Key header")
 end
 
--- 客户端IP
 local ip = ngx.var.remote_addr
 
 local red, err = redis_util.new()
@@ -51,7 +48,6 @@ if not red then
     return handle_circuit_break()
 end
 
--- 校验 apikey 是否合法
 local key_exist, err = red:exists("apikey:" .. api_key)
 if err then
     redis_util.close(red)
@@ -63,7 +59,6 @@ if key_exist ~= 1 then
     return deny(401, "invalid api key")
 end
 
--- 读取该 apikey 的动态配额
 local meta_key = "apikey:meta:" .. api_key
 local meta, err = red:hmget(meta_key, "limit", "window")
 if err then
@@ -74,7 +69,6 @@ end
 local rate_limit  = tonumber(meta[1]) or DEFAULT_RATE_LIMIT
 local rate_window = tonumber(meta[2]) or DEFAULT_RATE_WINDOW
 
--- IP白名单判断
 local in_whitelist, err = red:sismember("whitelist:ip", ip)
 if err then
     redis_util.close(red)
@@ -91,7 +85,7 @@ if in_whitelist == 1 then
     return
 end
 
--- ========= 滑动窗口限流 pipeline =========
+-- Sliding-window rate limit (pipeline)
 local now = ngx.now()
 local window_start = now - rate_window
 local limit_key = "ratelimit:sw:key:" .. api_key
@@ -118,7 +112,7 @@ ngx.header["X-RateLimit-Remaining"] = math.max(0, remaining)
 ngx.header["X-RateLimit-Reset"] = reset_ts
 
 if cnt >= rate_limit then
-    print("限流处理>>>>>>>>>>>>>>>>>>>>>>>>>>>> IP:  ", limit_key)
+    print("rate limited >>>>>>>>>>>>>>>>>>>>>>>>>>>> key: ", limit_key)
     redis_util.close(red)
     ngx.header["Retry-After"] = reset_ts - math.ceil(ngx.now())
     return deny(429, "too many requests, rate limited")

@@ -11,6 +11,18 @@ services:
     command: redis-server /etc/redis/redis.conf
     restart: always
 
+  # Seed default admin IP whitelist on compose up (SADD is idempotent)
+  redis-init:
+    image: redis:7-alpine
+    depends_on:
+      - redis
+    environment:
+      ADMIN_WHITELIST_IP: ${ADMIN_WHITELIST_IP:-192.168.65.1}
+    volumes:
+      - ./redis/init-admin-whitelist.sh:/init-admin-whitelist.sh:ro
+    entrypoint: ["/bin/sh", "/init-admin-whitelist.sh"]
+    restart: "no"
+
   openresty:
     image: openresty/openresty:alpine-fat
     container_name: gw-openresty
@@ -20,5 +32,8 @@ services:
       - ./nginx/conf/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
       - ./nginx/lua:/usr/local/openresty/nginx/lua:ro
     depends_on:
-      - redis
+      redis:
+        condition: service_started
+      redis-init:
+        condition: service_completed_successfully
     restart: always
