@@ -143,7 +143,7 @@ export function ApiKeyPanel() {
       <div>
         <h2 className="text-lg font-semibold tracking-tight">API Key</h2>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          点击「新增 API Key」后，列表区域切换为录入窗体；保存后恢复列表。
+          点击「新增 API Key」，列表区域切换为录入窗体；保存后恢复列表并刷新。
         </p>
       </div>
 

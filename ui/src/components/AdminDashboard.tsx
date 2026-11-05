@@ -23,12 +23,11 @@ export function AdminDashboard() {
         </p>
         <h1 className="text-2xl font-semibold tracking-tight">管理后台</h1>
         <p className="max-w-xl text-sm text-zinc-500 dark:text-zinc-400">
-          通过 Next.js 服务端签名调用{" "}
+          各模块采用「列表 + 点击新增切换窗体、保存后局部刷新列表」。接口：{" "}
           <code className="rounded bg-zinc-100 px-1 font-mono text-xs dark:bg-zinc-800">
             /admin/gw/v1
           </code>
-          （HMAC + 管理 IP 白名单）。需网关以 Redis 模式运行且本机 IP 在 admin
-          白名单内。
+          （HMAC）。需 Redis 模式且调用方 IP 在 admin 白名单内。
         </p>
       </header>
 
