@@ -1,6 +1,7 @@
 local store_mod = require "store"
 local cjson = require "cjson"
 local ngx = ngx
+local apikey_admin = require "apikey_admin"
 
 local function resp(code, data)
     ngx.status = code
@@ -88,6 +89,7 @@ if action == "upsert_apikey" then
     end
     backend.set(handle, "apikey:" .. api_key, "1")
     backend.hset(handle, "apikey:meta:" .. api_key, "limit", limit, "window", window)
+    apikey_admin.index_add_backend(backend, handle, api_key)
     backend.close(handle)
     return resp(200, {ok=true, msg="apikey saved"})
 
@@ -99,8 +101,32 @@ elseif action == "del_apikey" then
     end
     backend.del(handle, "apikey:" .. api_key)
     backend.del(handle, "apikey:meta:" .. api_key)
+    apikey_admin.index_del_backend(backend, handle, api_key)
     backend.close(handle)
     return resp(200, {ok=true, msg="apikey deleted"})
+
+elseif action == "apikey_list" then
+    local result, err = apikey_admin.list_backend(backend, handle, req.page, req.page_size)
+    backend.close(handle)
+    if not result then
+        return resp(500, {ok=false, msg="storage error: " .. tostring(err)})
+    end
+    return resp(200, {ok=true, apikeys=result.items, total=result.total, page=result.page, page_size=result.page_size, total_pages=result.total_pages})
+
+elseif action == "get_apikey" then
+    local api_key = req.api_key
+    local item, err = apikey_admin.get_backend(backend, handle, api_key)
+    backend.close(handle)
+    if err == "need api_key" then
+        return resp(400, {ok=false, msg=err})
+    end
+    if err == "not found" then
+        return resp(404, {ok=false, msg="apikey not found"})
+    end
+    if not item then
+        return resp(500, {ok=false, msg="storage error: " .. tostring(err)})
+    end
+    return resp(200, {ok=true, apikey=item})
 
 elseif action == "whitelist_add" then
     local ip = req.ip

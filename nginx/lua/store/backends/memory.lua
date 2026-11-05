@@ -166,12 +166,30 @@ function _M.access_log_append(_store, line)
     return true, nil
 end
 
+function _M.list_kv_prefix(_store, prefix)
+    local d = dict()
+    local storage_prefix = "k:" .. prefix
+    local meta_prefix = "k:apikey:meta:"
+    local keys = d:get_keys(0)
+    local out = {}
+    for _, full in ipairs(keys) do
+        if full:sub(1, #storage_prefix) == storage_prefix and full:sub(1, #meta_prefix) ~= meta_prefix then
+            local id = full:sub(#storage_prefix + 1)
+            if id ~= "" and id ~= "index" then
+                out[#out + 1] = id
+            end
+        end
+    end
+    return out, nil
+end
+
 function _M.bootstrap(_store, opts)
     for ip in string.gmatch(opts.admin_whitelist_ips, "[^,%s]+") do
         _M.sadd(_store, "admin:whitelist:ip", ip)
     end
     _M.set(_store, "apikey:" .. opts.api_key, "1")
     _M.hset(_store, "apikey:meta:" .. opts.api_key, "limit", opts.api_key_limit, "window", opts.api_key_window)
+    _M.sadd(_store, "apikey:index", opts.api_key)
     local token_info = cjson.encode({ creator = "bootstrap", expire_at = 0 })
     _M.set(_store, "admin:token:" .. opts.admin_token, token_info)
     return true, nil

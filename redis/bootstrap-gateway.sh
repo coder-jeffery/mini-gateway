@@ -26,4 +26,5 @@ done
 
 cli SET "apikey:${DEFAULT_API_KEY}" "1" >/dev/null
 cli HSET "apikey:meta:${DEFAULT_API_KEY}" limit "$DEFAULT_API_KEY_LIMIT" window "$DEFAULT_API_KEY_WINDOW" >/dev/null
+cli SADD "apikey:index" "$DEFAULT_API_KEY" >/dev/null
 cli SET "admin:token:${DEFAULT_ADMIN_TOKEN}" '{"creator":"bootstrap","expire_at":0}' >/dev/null

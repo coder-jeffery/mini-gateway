@@ -5,6 +5,8 @@ import type { AdminAction } from "@/lib/admin-types";
 const ACTIONS: AdminAction[] = [
   "upsert_apikey",
   "del_apikey",
+  "get_apikey",
+  "apikey_list",
   "whitelist_add",
   "whitelist_del",
   "whitelist_list",

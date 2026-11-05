@@ -196,12 +196,30 @@ function _M.access_log_append(store, line)
     return true, nil
 end
 
+function _M.list_kv_prefix(store, prefix)
+    local stmt = db(store):prepare(
+        "SELECT k FROM kv WHERE k LIKE ? AND k NOT LIKE 'apikey:meta:%'"
+    )
+    stmt:bind_values(prefix .. "%")
+    local out = {}
+    while stmt:step() == lsqlite3.ROW do
+        local k = stmt:get_value(0)
+        local id = k:sub(#prefix + 1)
+        if id ~= "" and id ~= "index" then
+            out[#out + 1] = id
+        end
+    end
+    stmt:finalize()
+    return out, nil
+end
+
 function _M.bootstrap(store, opts)
     for ip in string.gmatch(opts.admin_whitelist_ips, "[^,%s]+") do
         _M.sadd(store, "admin:whitelist:ip", ip)
     end
     _M.set(store, "apikey:" .. opts.api_key, "1")
     _M.hset(store, "apikey:meta:" .. opts.api_key, "limit", opts.api_key_limit, "window", opts.api_key_window)
+    _M.sadd(store, "apikey:index", opts.api_key)
     local token_info = cjson.encode({ creator = "bootstrap", expire_at = 0 })
     _M.set(store, "admin:token:" .. opts.admin_token, token_info)
     return true, nil
