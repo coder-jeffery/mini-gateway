@@ -1,0 +1,9 @@
+.git
+.DS_Store
+data/
+ui/node_modules
+ui/.next
+ui/.env.local
+*.md
+test/
+agent-transcripts

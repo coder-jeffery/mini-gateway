@@ -6,6 +6,34 @@ local hmac = require "resty.hmac"
 local ADMIN_SECRET = "admin-secret-2026"
 local SIGN_WINDOW = 60 -- signature timestamp tolerance (seconds)
 
+local function is_private_ip(ip)
+    local a, b = ip:match("^(%d+)%.(%d+)%.")
+    a, b = tonumber(a), tonumber(b)
+    if not a then
+        return false
+    end
+    if a == 10 then
+        return true
+    end
+    if a == 172 and b and b >= 16 and b <= 31 then
+        return true
+    end
+    if a == 192 and b == 168 then
+        return true
+    end
+    if ip == "127.0.0.1" or ip == "::1" then
+        return true
+    end
+    return false
+end
+
+local function admin_ip_allowed(client_ip)
+    if os.getenv("GATEWAY_ADMIN_TRUST_PRIVATE") == "1" and is_private_ip(client_ip) then
+        return true
+    end
+    return false
+end
+
 local function resp(code, data)
     ngx.status = code
     ngx.header["Content-Type"] = "application/json"
@@ -36,7 +64,7 @@ if err then
     redis_util.close(red)
     return resp(500, {ok=false, msg="redis error"})
 end
-if in_admin_whitelist ~= 1 then
+if in_admin_whitelist ~= 1 and not admin_ip_allowed(client_ip) then
     redis_util.close(red)
     return resp(403, {ok=false, msg="forbidden: ip not in admin whitelist"})
 end

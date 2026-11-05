@@ -1,12 +1,10 @@
-version: '3.8'
-
 services:
   redis:
     profiles: ["redis"]
     image: redis:7-alpine
     container_name: gw-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - ./redis/redis.conf:/etc/redis/redis.conf
     command: redis-server /etc/redis/redis.conf
@@ -30,17 +28,18 @@ services:
 
   openresty:
     build:
-      context: ./openresty
+      context: .
       dockerfile: Dockerfile
     image: gw-openresty:local
     container_name: gw-openresty
     ports:
-      - "8080:8080"
+      - "${GATEWAY_PORT:-8080}:8080"
     environment:
       GATEWAY_STORAGE: ${GATEWAY_STORAGE:-memory}
       GATEWAY_SQLITE_PATH: ${GATEWAY_SQLITE_PATH:-/var/lib/gateway/gateway.db}
       GATEWAY_REDIS_HOST: ${GATEWAY_REDIS_HOST:-redis}
       GATEWAY_REDIS_PORT: ${GATEWAY_REDIS_PORT:-6379}
+      GATEWAY_ADMIN_TRUST_PRIVATE: ${GATEWAY_ADMIN_TRUST_PRIVATE:-1}
       ADMIN_WHITELIST_IPS: ${ADMIN_WHITELIST_IPS:-127.0.0.1,172.17.0.1,192.168.65.1}
       DEFAULT_API_KEY: ${DEFAULT_API_KEY:-mini-key}
       DEFAULT_API_KEY_LIMIT: ${DEFAULT_API_KEY_LIMIT:-1000}
@@ -50,4 +49,22 @@ services:
       - ./nginx/conf/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
       - ./nginx/lua:/usr/local/openresty/nginx/lua:ro
       - ./data:/var/lib/gateway
+    restart: always
+
+  ui:
+    profiles: ["ui"]
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    image: gw-ui:local
+    container_name: gw-ui
+    depends_on:
+      - openresty
+    ports:
+      - "${UI_PORT:-3000}:3000"
+    environment:
+      PORT: ${UI_PORT:-3000}
+      HOSTNAME: 0.0.0.0
+      GATEWAY_ADMIN_URL: ${GATEWAY_ADMIN_URL:-http://openresty:8080/admin/gw/v1}
+      GATEWAY_ADMIN_SECRET: ${GATEWAY_ADMIN_SECRET:-admin-secret-2026}
     restart: always

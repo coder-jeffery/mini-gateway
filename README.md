@@ -9,8 +9,15 @@ Intro:
 
 ```bash
 cd mini-gateway
-./start.sh
+./start-redis.sh    # ① Redis + 初始化（成功后才继续）
+./start-gateway.sh  # ② 网关（依赖 Redis 就绪）
+./start-ui.sh       # ③ 管理 UI（依赖网关就绪）
+./start-all.sh      # 按顺序执行 ①→②→③
+./start.sh          # 仅网关栈（memory/sqlite 或 redis 一步起）
+./stop.sh           # 停止全部容器
 ```
+
+Docker 三容器：`gw-redis`（6379）、`gw-openresty`（8080）、`gw-ui`（3000）。端口可用 `.env` 的 `REDIS_PORT` / `GATEWAY_PORT` / `UI_PORT` 调整。
 
 ### Storage (`GATEWAY_STORAGE`)
 
@@ -113,3 +120,7 @@ GATEWAY_STORAGE=sqlite ./start.sh             # SQLite 落盘 ./data/
 --
 curl -i http://127.0.0.1:8080/                              # 401
 curl -i -H "X-Api-Key: mini-key" http://127.0.0.1:8080/     # 200
+
+
+apt install nginx-module-http2
+brew install nginx
