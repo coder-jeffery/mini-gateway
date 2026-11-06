@@ -3,76 +3,48 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import json
 import os
-import time
+import sys
 import urllib.error
 import urllib.request
-import base64
-import uuid
 
-
-GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://127.0.0.1:8080/").rstrip("/") + "/"
-SECRET = os.environ.get("OAUTH2_JWT_SECRET", "oauth2-dev-secret")
-
-
-def b64url(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
-
-
-def make_hs256_jwt(payload: dict, secret: str) -> str:
-    header = b64url(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
-    body = b64url(json.dumps(payload, separators=(",", ":")).encode())
-    signing_input = f"{header}.{body}".encode()
-    sig = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
-    return f"{header}.{body}.{b64url(sig)}"
+sys.path.insert(0, os.path.dirname(__file__))
+from jwt_client import build_case, gateway_url
 
 
 def call_bearer(token: str | None) -> tuple[int, dict]:
     headers = {"Accept": "application/json"}
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(GATEWAY_URL, headers=headers, method="GET")
+    req = urllib.request.Request(gateway_url(), headers=headers, method="GET")
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            return resp.status, json.loads(resp.read().decode() or "{}")
+            return resp.status, __import__("json").loads(resp.read().decode() or "{}")
     except urllib.error.HTTPError as e:
         body = e.read().decode()
         try:
-            data = json.loads(body)
-        except json.JSONDecodeError:
+            data = __import__("json").loads(body)
+        except __import__("json").JSONDecodeError:
             data = {"msg": body}
         return e.code, data
 
 
 def test_bearer_ok() -> None:
-    now = int(time.time())
-    payload: dict = {
-        "sub": f"user-{uuid.uuid4()}",
-        "exp": now + 300,
-    }
-    issuer = os.environ.get("OAUTH2_ISSUER", "").strip()
-    if issuer:
-        payload["iss"] = issuer
-    token = make_hs256_jwt(payload, SECRET)
+    _, _, token = build_case("valid")
     status, data = call_bearer(token)
     print("bearer OK:", status, data)
     assert status == 200, data
 
 
 def test_bearer_bad_sig() -> None:
-    now = int(time.time())
-    token = make_hs256_jwt({"sub": "x", "exp": now + 300}, SECRET) + "x"
+    _, _, token = build_case("bad_sig")
     status, data = call_bearer(token)
     print("bad sig:", status, data)
     assert status == 401, data
 
 
 def test_bearer_expired() -> None:
-    skew = int(os.environ.get("OAUTH2_CLOCK_SKEW_SEC", "60"))
-    token = make_hs256_jwt({"sub": "x", "exp": int(time.time()) - skew - 30}, SECRET)
+    _, _, token = build_case("expired")
     status, data = call_bearer(token)
     print("expired:", status, data)
     assert status == 401, data

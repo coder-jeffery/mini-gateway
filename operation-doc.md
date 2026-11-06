@@ -72,8 +72,12 @@ OAuth2 Resource Server（阶段 1，Bearer JWT）：
         # 重启网关后
         python3 test/test_oauth2.py
 
-    curl Bearer（需自行签发 JWT 或使用 IdP access token）：
-        curl -i -H "Authorization: Bearer <access_token>" http://127.0.0.1:8080/
+    测试数据与 curl（HS256 联调）见 test/jwt-test-data.md、test/jwt_fixtures.json：
+        chmod +x test/jwt_call.sh
+        ./test/jwt_call.sh valid
+        ./test/jwt_call.sh token valid
+        TOKEN=$(./test/jwt_call.sh token valid)
+        curl -i -H "Authorization: Bearer ${TOKEN}" http://127.0.0.1:8080/
 
     成功时响应头含 X-Gateway-Auth: oauth2、X-Gateway-Auth-Subject（限流 key）。
 

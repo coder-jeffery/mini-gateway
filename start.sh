@@ -149,6 +149,64 @@ compose_extract_bind_port() {
   echo "$p"
 }
 
+# Registry / mirror pull failures (e.g. docker.m.daocloud.io context deadline exceeded)
+gateway_docker_registry_pull_failed() {
+  local output="$1"
+  echo "$output" | grep -qiE \
+    'context deadline exceeded|i/o timeout|TLS handshake timeout|error response from daemon|manifest unknown|failed to resolve reference|net/http: request canceled'
+}
+
+gateway_print_registry_pull_help() {
+  local image="${1:-${REDIS_IMAGE:-redis:7-alpine}}"
+  cat >&2 <<EOF
+[start] 无法从 Docker 镜像仓库拉取镜像（多为 registry mirror 超时，例如 docker.m.daocloud.io）。
+
+建议按顺序尝试：
+  1) 检查网络 / VPN，或更换 Docker Desktop → Settings → Docker Engine 中的 registry-mirrors
+     （临时去掉失效的 daocloud 镜像加速，保存并 Restart Docker）
+  2) 手动拉取（成功后再 ./start-redis.sh）：
+       docker pull ${image}
+     或指定可用镜像：
+       REDIS_IMAGE=${image} docker pull \${REDIS_IMAGE}
+  3) 查看详细日志：
+       START_VERBOSE=1 ./start-redis.sh
+
+当前 REDIS_IMAGE=${image}
+EOF
+}
+
+gateway_ensure_redis_image() {
+  local image="${REDIS_IMAGE:-redis:7-alpine}"
+  local tries="${DOCKER_PULL_RETRIES:-3}"
+  local i=1
+
+  if docker image inspect "$image" >/dev/null 2>&1; then
+    log "redis image already local: ${image}"
+    return 0
+  fi
+
+  log "redis image missing locally, pulling ${image} ..."
+  while [[ "$i" -le "$tries" ]]; do
+    local pull_log
+    pull_log="$(mktemp)"
+    if docker pull "$image" >"$pull_log" 2>&1; then
+      rm -f "$pull_log"
+      log "pulled ${image}"
+      return 0
+    fi
+    local pull_out
+    pull_out="$(cat "$pull_log")"
+    rm -f "$pull_log"
+    log "docker pull attempt ${i}/${tries} failed: $(echo "$pull_out" | tail -1)"
+    if [[ "$i" -eq "$tries" ]]; then
+      gateway_print_registry_pull_help "$image"
+      die "docker pull failed for ${image}"
+    fi
+    sleep "$((i * 2))"
+    i=$((i + 1))
+  done
+}
+
 wait_redis_pong() {
   local max="${1:-60}" i=0
   while [[ $i -lt $max ]]; do
@@ -250,6 +308,12 @@ compose_run() {
     output="$(cat "$compose_log")"
   fi
 
+  if gateway_docker_registry_pull_failed "$output"; then
+    rm -f "$compose_log"
+    gateway_print_registry_pull_help "${REDIS_IMAGE:-redis:7-alpine}"
+    die "docker registry pull timeout or unreachable — $(echo "$output" | tail -1)"
+  fi
+
   rm -f "$compose_log"
   die "command failed: docker compose $* — $(echo "$output" | tail -1) (try: START_VERBOSE=1 ./start.sh)"
 }
@@ -282,7 +346,8 @@ gateway_start_redis() {
 
   gateway_normalize_container gw-redis
   gateway_ensure_port_free "$redis_port" gw-redis
-  compose_run --profile redis up -d --build redis
+  gateway_ensure_redis_image
+  compose_run --profile redis up -d redis
   assert_container_running gw-redis
   assert_container_not_paused gw-redis
   wait_redis_pong 60 || die "redis PING failed (docker logs gw-redis)"

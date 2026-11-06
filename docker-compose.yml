@@ -1,7 +1,8 @@
 services:
   redis:
     profiles: ["redis"]
-    image: redis:7-alpine
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    pull_policy: if_not_present
     container_name: gw-redis
     ports:
       - "${REDIS_PORT:-6379}:6379"
@@ -12,7 +13,8 @@ services:
 
   redis-init:
     profiles: ["redis"]
-    image: redis:7-alpine
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    pull_policy: if_not_present
     depends_on:
       - redis
     environment:

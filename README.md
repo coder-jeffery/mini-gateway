@@ -19,6 +19,17 @@ cd mini-gateway
 
 Docker 三容器：`gw-redis`（6379）、`gw-openresty`（8080）、`gw-ui`（3000）。端口可用 `.env` 的 `REDIS_PORT` / `GATEWAY_PORT` / `UI_PORT` 调整。
 
+### Redis 镜像拉取失败（`context deadline exceeded` / `docker.m.daocloud.io`）
+
+原因：Docker Desktop 配置了 **registry mirror**（如 DaoCloud），访问超时，与 mini-gateway 脚本无关。
+
+处理：
+
+1. Docker Desktop → **Settings → Docker Engine**，检查 `registry-mirrors`；去掉失效的 `docker.m.daocloud.io` 或换可用镜像源，**Apply & Restart**。
+2. 手动拉取后再启动：`docker pull redis:7-alpine`，然后 `./start-redis.sh`。
+3. 本地已有镜像时，compose 已设 `pull_policy: if_not_present`，不会重复拉取。
+4. 指定镜像：`REDIS_IMAGE=redis:7-alpine ./start-redis.sh`（或 `.env` 中设置 `REDIS_IMAGE`）。
+
 ### Storage (`GATEWAY_STORAGE`)
 
 | Value | Description |

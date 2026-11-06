@@ -1,0 +1,90 @@
+{
+  "description": "HS256 JWT 联调 fixtures（token 需用 jwt_call.sh / jwt_client 动态签发，exp 会过期）",
+  "prerequisites": {
+    "gateway_env": {
+      "GATEWAY_AUTH_MODE": "both",
+      "OAUTH2_JWT_SECRET": "oauth2-dev-secret",
+      "OAUTH2_ISSUER": "（可选，与 payload.iss 一致）",
+      "OAUTH2_AUDIENCE": "（可选，与 payload.aud 一致）",
+      "OAUTH2_REQUIRED_SCOPE": "（可选，token 需含对应 scope）"
+    },
+    "business_endpoint": "GET http://127.0.0.1:8080/",
+    "note": "该路径经网关 access_check 后转发至 httpbin；200 表示鉴权+限流通过。"
+  },
+  "cases": [
+    {
+      "id": "valid",
+      "summary": "合法 Bearer，期望 200",
+      "payload_template": {
+        "sub": "test-user-valid",
+        "exp_offset_sec": 3600
+      },
+      "expect_http_status": 200,
+      "expect_headers": ["X-Gateway-Auth: oauth2", "X-Gateway-Auth-Subject"]
+    },
+    {
+      "id": "valid_client",
+      "summary": "含 client_id，限流维度可配 OAUTH2_RATE_LIMIT_KEY=client_id",
+      "payload_template": {
+        "sub": "svc-account",
+        "client_id": "client-mini-gateway-01",
+        "exp_offset_sec": 3600
+      },
+      "expect_http_status": 200
+    },
+    {
+      "id": "expired",
+      "summary": "exp 早于 now - clock_skew，期望 401 token expired",
+      "payload_template": {
+        "sub": "test-user-expired",
+        "exp_offset_sec": "negative (see jwt_client.build_case)"
+      },
+      "expect_http_status": 401,
+      "expect_body_msg": "token expired"
+    },
+    {
+      "id": "bad_sig",
+      "summary": "篡改签名，期望 401",
+      "expect_http_status": 401,
+      "expect_body_msg": "invalid token signature"
+    },
+    {
+      "id": "wrong_secret",
+      "summary": "用错误 secret 签发，期望 401",
+      "sign_secret": "not-the-gateway-secret",
+      "expect_http_status": 401
+    },
+    {
+      "id": "missing_exp",
+      "summary": "无 exp，期望 401 missing exp claim",
+      "payload_template": { "sub": "test-user-no-exp" },
+      "expect_http_status": 401
+    },
+    {
+      "id": "wrong_audience",
+      "summary": "仅当网关配置了 OAUTH2_AUDIENCE 时有效，期望 401 invalid audience",
+      "payload_template": { "aud": "wrong-audience-value" },
+      "expect_http_status": 401,
+      "requires_env": ["OAUTH2_AUDIENCE"]
+    },
+    {
+      "id": "missing_scope",
+      "summary": "仅当网关配置了 OAUTH2_REQUIRED_SCOPE 时有效，期望 401 insufficient scope",
+      "expect_http_status": 401,
+      "requires_env": ["OAUTH2_REQUIRED_SCOPE"]
+    },
+    {
+      "id": "no_bearer_both_mode",
+      "summary": "both 模式下无 Bearer 且无 X-Api-Key，期望 401",
+      "curl": "curl -i http://127.0.0.1:8080/",
+      "expect_http_status": 401
+    },
+    {
+      "id": "api_key_fallback",
+      "summary": "both 模式下仅 X-Api-Key，期望 200",
+      "curl": "curl -i -H \"X-Api-Key: mini-key\" http://127.0.0.1:8080/",
+      "expect_http_status": 200,
+      "requires_env": ["DEFAULT_API_KEY 或已 upsert 的 apikey"]
+    }
+  ]
+}

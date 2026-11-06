@@ -1,0 +1,314 @@
+{
+  "info": {
+    "_postman_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "name": "mini-gateway",
+    "description": "业务网关 OAuth2 Bearer (JWT HS256) + API Key；管理面 HMAC POST /admin/gw/v1。\n\n**导入**：Postman → Import → 选择 `mini-gateway.postman_collection.json` 与 `mini-gateway.postman_environment.json`，右上角启用 Environment **mini-gateway local**。\n\n**网关**：`GATEWAY_AUTH_MODE=both`（或 bearer）、`OAUTH2_JWT_SECRET` 与环境变量 `oauth2_jwt_secret` 一致。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "/** @namespace mini-gateway Postman helpers */",
+          "b64urlJson = function (obj) {",
+          "  const s = JSON.stringify(obj);",
+          "  const w = CryptoJS.enc.Utf8.parse(s);",
+          "  return CryptoJS.enc.Base64.stringify(w)",
+          "    .replace(/=+$/, '')",
+          "    .replace(/\\+/g, '-')",
+          "    .replace(/\\//g, '_');",
+          "};",
+          "",
+          "signHs256Jwt = function (payload) {",
+          "  const secret = pm.environment.get('oauth2_jwt_secret') || 'oauth2-dev-secret';",
+          "  const h = b64urlJson({ alg: 'HS256', typ: 'JWT' });",
+          "  const p = b64urlJson(payload);",
+          "  const input = h + '.' + p;",
+          "  const sig = CryptoJS.HmacSHA256(input, secret);",
+          "  const es = CryptoJS.enc.Base64.stringify(sig)",
+          "    .replace(/=+$/, '')",
+          "    .replace(/\\+/g, '-')",
+          "    .replace(/\\//g, '_');",
+          "  return input + '.' + es;",
+          "};",
+          "",
+          "buildJwtPayload = function (kind) {",
+          "  const now = Math.floor(Date.now() / 1000);",
+          "  const skew = parseInt(pm.environment.get('oauth2_clock_skew_sec') || '60', 10);",
+          "  let payload;",
+          "  if (kind === 'valid_client') {",
+          "    payload = { sub: 'svc-account', client_id: 'client-mini-gateway-01', exp: now + 3600 };",
+          "  } else if (kind === 'expired') {",
+          "    payload = { sub: 'test-user-expired', exp: now - skew - 120 };",
+          "  } else {",
+          "    payload = { sub: 'test-user-valid', exp: now + 3600 };",
+          "  }",
+          "  const iss = pm.environment.get('oauth2_issuer');",
+          "  if (iss) { payload.iss = iss; }",
+          "  const aud = pm.environment.get('oauth2_audience');",
+          "  if (aud && aud.indexOf(',') === -1) { payload.aud = aud; }",
+          "  const scope = pm.environment.get('oauth2_required_scope');",
+          "  if (scope) { payload.scope = scope.split(',')[0].trim(); }",
+          "  return payload;",
+          "};",
+          "",
+          "signAdminHmac = function () {",
+          "  const secret = pm.environment.get('gateway_admin_secret') || 'admin-secret-2026';",
+          "  const ts = Math.floor(Date.now() / 1000);",
+          "  const nonce = pm.variables.replaceIn('{{$guid}}');",
+          "  const raw = ts + ':' + nonce;",
+          "  const sign = CryptoJS.HmacSHA256(raw, secret).toString(CryptoJS.enc.Hex);",
+          "  pm.environment.set('hmac_ts', ts);",
+          "  pm.environment.set('hmac_nonce', nonce);",
+          "  pm.environment.set('hmac_sign', sign);",
+          "};"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Business API (GET /)",
+      "description": "测试接口：`GET {{gateway_base_url}}/`",
+      "item": [
+        {
+          "name": "JWT valid (HS256)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('jwt_access_token', signHs256Jwt(buildJwtPayload('valid')));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('X-Gateway-Auth oauth2', function () {",
+                  "  pm.expect(pm.response.headers.get('X-Gateway-Auth')).to.eql('oauth2');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwt_access_token}}" }
+            ],
+            "url": "{{gateway_base_url}}/",
+            "description": "Payload: sub=test-user-valid, exp=now+3600（Pre-request 动态签发）"
+          },
+          "response": []
+        },
+        {
+          "name": "JWT expired",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('jwt_access_token', signHs256Jwt(buildJwtPayload('expired')));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('token expired', function () {",
+                  "  pm.expect(pm.response.json().msg).to.include('expired');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt_access_token}}" }
+            ],
+            "url": "{{gateway_base_url}}/"
+          },
+          "response": []
+        },
+        {
+          "name": "JWT bad signature",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('jwt_access_token', signHs256Jwt(buildJwtPayload('valid')) + 'tampered');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt_access_token}}" }
+            ],
+            "url": "{{gateway_base_url}}/"
+          },
+          "response": []
+        },
+        {
+          "name": "JWT valid with client_id",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('jwt_access_token', signHs256Jwt(buildJwtPayload('valid_client')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt_access_token}}" }
+            ],
+            "url": "{{gateway_base_url}}/"
+          },
+          "response": []
+        },
+        {
+          "name": "API Key (both mode)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('X-Gateway-Auth api_key', function () {",
+                  "  pm.expect(pm.response.headers.get('X-Gateway-Auth')).to.eql('api_key');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{api_key}}" }
+            ],
+            "url": "{{gateway_base_url}}/"
+          },
+          "response": []
+        },
+        {
+          "name": "No credentials (both mode)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gateway_base_url}}/"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin API HMAC (POST /admin/gw/v1)",
+      "item": [
+        {
+          "name": "hmac_test",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["signAdminHmac();"]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('hmac verified', function () {",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j.ok).to.be.true;",
+                  "  pm.expect(j.msg).to.eql('hmac verified');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ts\": {{hmac_ts}},\n  \"nonce\": \"{{hmac_nonce}}\",\n  \"sign\": \"{{hmac_sign}}\",\n  \"action\": \"hmac_test\"\n}"
+            },
+            "url": "{{admin_gw_v1_url}}"
+          },
+          "response": []
+        },
+        {
+          "name": "whitelist_list",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["signAdminHmac();"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ts\": {{hmac_ts}},\n  \"nonce\": \"{{hmac_nonce}}\",\n  \"sign\": \"{{hmac_sign}}\",\n  \"action\": \"whitelist_list\"\n}"
+            },
+            "url": "{{admin_gw_v1_url}}"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
