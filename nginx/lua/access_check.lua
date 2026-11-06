@@ -1,6 +1,9 @@
--- API key auth, quotas, whitelist, sliding-window rate limit, circuit breaker (redis only)
+-- API key / OAuth2 Bearer auth, quotas, whitelist, sliding-window rate limit
 
 local store_mod = require "store"
+local config = require "gateway_config"
+local oauth = require "oauth_validate"
+local cjson = require "cjson"
 local ngx = ngx
 
 local CIRCUIT_BREAK_POLICY = "pass"
@@ -10,7 +13,7 @@ local DEFAULT_RATE_WINDOW = 60
 local function deny(status, msg)
     ngx.status = status
     ngx.header["Content-Type"] = "application/json"
-    ngx.say('{"code":'..status..',"msg":"'..msg..'"}')
+    ngx.say(cjson.encode({ code = status, msg = msg }))
     return ngx.exit(status)
 end
 
@@ -30,9 +33,60 @@ local function handle_storage_outage()
     return
 end
 
-local api_key = ngx.var.http_x_api_key
-if not api_key or api_key == "" then
-    return deny(401, "missing X-Api-Key header")
+-- Returns rate_limit_key, rate_limit, rate_window, auth_label or nil + deny
+local function resolve_identity()
+    local mode = config.auth_mode()
+    local bearer = oauth.extract_bearer()
+    local api_key = ngx.var.http_x_api_key
+
+    if bearer and bearer ~= "" then
+        if mode == "api_key" then
+            return deny(401, "bearer token not accepted in api_key auth mode")
+        end
+        local claims, err, status = oauth.validate(bearer)
+        if not claims then
+            return deny(status or 401, err or "invalid token")
+        end
+        local identity = oauth.rate_limit_identity(claims)
+        ngx.ctx.auth_type = "oauth2"
+        ngx.ctx.auth_subject = identity
+        ngx.header["X-Gateway-Auth"] = "oauth2"
+        ngx.header["X-Gateway-Auth-Subject"] = identity
+        return {
+            rate_key = "ratelimit:sw:oauth:" .. identity,
+            limit = config.oauth2_default_limit(),
+            window = config.oauth2_default_window(),
+            use_apikey_store = false,
+        }
+    end
+
+    if mode == "bearer" then
+        return deny(401, "missing Authorization Bearer token")
+    end
+
+    if not api_key or api_key == "" then
+        if mode == "both" then
+            return deny(401, "missing Authorization Bearer token or X-Api-Key header")
+        end
+        return deny(401, "missing X-Api-Key header")
+    end
+
+    ngx.ctx.auth_type = "api_key"
+    ngx.ctx.auth_subject = api_key
+    ngx.header["X-Gateway-Auth"] = "api_key"
+
+    return {
+        rate_key = "ratelimit:sw:key:" .. api_key,
+        limit = nil,
+        window = nil,
+        use_apikey_store = true,
+        api_key = api_key,
+    }
+end
+
+local identity = resolve_identity()
+if not identity then
+    return
 end
 
 local ip = ngx.var.remote_addr
@@ -45,30 +99,36 @@ end
 
 ngx.header["X-Gateway-Storage"] = store_mod.name()
 
-local key_exist, err = backend.exists(handle, "apikey:" .. api_key)
-if err then
-    backend.close(handle)
-    ngx.log(ngx.ERR, "storage exists err: ", err)
-    return handle_storage_outage()
-end
-if key_exist ~= 1 then
-    backend.close(handle)
-    return deny(401, "invalid api key")
+local rate_limit = identity.limit
+local rate_window = identity.window
+
+if identity.use_apikey_store then
+    local api_key = identity.api_key
+    local key_exist, err_exists = backend.exists(handle, "apikey:" .. api_key)
+    if err_exists then
+        backend.close(handle)
+        ngx.log(ngx.ERR, "storage exists err: ", err_exists)
+        return handle_storage_outage()
+    end
+    if key_exist ~= 1 then
+        backend.close(handle)
+        return deny(401, "invalid api key")
+    end
+
+    local meta, err_meta = backend.hmget(handle, "apikey:meta:" .. api_key, "limit", "window")
+    if err_meta then
+        backend.close(handle)
+        ngx.log(ngx.ERR, "storage hmget err: ", err_meta)
+        return handle_storage_outage()
+    end
+    rate_limit = tonumber(meta[1]) or DEFAULT_RATE_LIMIT
+    rate_window = tonumber(meta[2]) or DEFAULT_RATE_WINDOW
 end
 
-local meta, err = backend.hmget(handle, "apikey:meta:" .. api_key, "limit", "window")
-if err then
+local in_whitelist, err_wl = backend.sismember(handle, "whitelist:ip", ip)
+if err_wl then
     backend.close(handle)
-    ngx.log(ngx.ERR, "storage hmget err: ", err)
-    return handle_storage_outage()
-end
-local rate_limit  = tonumber(meta[1]) or DEFAULT_RATE_LIMIT
-local rate_window = tonumber(meta[2]) or DEFAULT_RATE_WINDOW
-
-local in_whitelist, err = backend.sismember(handle, "whitelist:ip", ip)
-if err then
-    backend.close(handle)
-    ngx.log(ngx.ERR, "storage sismember err: ", err)
+    ngx.log(ngx.ERR, "storage sismember err: ", err_wl)
     return handle_storage_outage()
 end
 
@@ -82,13 +142,13 @@ if in_whitelist == 1 then
 end
 
 local now = ngx.now()
-local limit_key = "ratelimit:sw:key:" .. api_key
+local limit_key = identity.rate_key
 local unique_id = now .. ":" .. ngx.var.pid .. ":" .. math.random()
 
-local cnt, err = backend.sliding_window(handle, limit_key, rate_window, now, unique_id)
-if err then
+local cnt, err_rl = backend.sliding_window(handle, limit_key, rate_window, now, unique_id)
+if err_rl then
     backend.close(handle)
-    ngx.log(ngx.ERR, "storage rate limit err: ", err)
+    ngx.log(ngx.ERR, "storage rate limit err: ", err_rl)
     return handle_storage_outage()
 end
 

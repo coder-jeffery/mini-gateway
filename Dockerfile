@@ -3,6 +3,8 @@ FROM openresty/openresty:alpine-fat
 
 RUN apk add --no-cache sqlite-libs sqlite-dev gcc musl-dev make \
     && luarocks install lsqlite3 \
+    && luarocks install lua-resty-http \
+    && luarocks install lua-resty-rsa \
     && apk del gcc musl-dev make sqlite-dev
 
 COPY nginx/conf/nginx.conf /usr/local/openresty/nginx/conf/nginx.conf

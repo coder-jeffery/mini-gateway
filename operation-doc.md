@@ -57,6 +57,26 @@ operation doc:
 <!-- 业务网关（仅 API Key，GET 即可） -->
 <!-- curl -i -H "X-Api-Key: mini-key" http://127.0.0.1:8080/ -->
 
+OAuth2 Resource Server（阶段 1，Bearer JWT）：
+
+    环境变量（见 .env.example）：
+        GATEWAY_AUTH_MODE=api_key|bearer|both   # 默认 api_key，兼容旧行为
+        OAUTH2_ISSUER / OAUTH2_JWKS_URI         # RS256（可只配 ISSUER，自动拉 OIDC discovery）
+        OAUTH2_JWT_SECRET                       # 本地 HS256 联调
+        OAUTH2_AUDIENCE / OAUTH2_REQUIRED_SCOPE # 可选 claim 校验
+        OAUTH2_RATE_LIMIT_KEY=sub|client_id     # 限流维度，默认 sub
+
+    HS256 联调示例（both 模式，API Key 与 Bearer 二选一）：
+        export GATEWAY_AUTH_MODE=both
+        export OAUTH2_JWT_SECRET=oauth2-dev-secret
+        # 重启网关后
+        python3 test/test_oauth2.py
+
+    curl Bearer（需自行签发 JWT 或使用 IdP access token）：
+        curl -i -H "Authorization: Bearer <access_token>" http://127.0.0.1:8080/
+
+    成功时响应头含 X-Gateway-Auth: oauth2、X-Gateway-Auth-Subject（限流 key）。
+
 HMAC 管理接口 v1（/admin/gw/v1，POST + 签名；管理 IP 需在白名单）：
 
     与上面业务 curl 对应的 HMAC 探测（同样 curl -i，验签 action hmac_test）：

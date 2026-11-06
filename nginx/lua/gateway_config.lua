@@ -38,4 +38,58 @@ function _M.bootstrap_defaults()
     }
 end
 
+-- api_key | bearer | both (default api_key keeps existing behavior)
+function _M.auth_mode()
+    local v = env("GATEWAY_AUTH_MODE", "api_key"):lower()
+    if v == "bearer" or v == "both" then
+        return v
+    end
+    return "api_key"
+end
+
+function _M.oauth2_issuer()
+    return env("OAUTH2_ISSUER", "")
+end
+
+function _M.oauth2_jwks_uri()
+    return env("OAUTH2_JWKS_URI", "")
+end
+
+function _M.oauth2_audience()
+    return env("OAUTH2_AUDIENCE", "")
+end
+
+function _M.oauth2_required_scope()
+    return env("OAUTH2_REQUIRED_SCOPE", "")
+end
+
+function _M.oauth2_jwt_secret()
+    return env("OAUTH2_JWT_SECRET", "")
+end
+
+function _M.oauth2_clock_skew_sec()
+    return tonumber(env("OAUTH2_CLOCK_SKEW_SEC", "60")) or 60
+end
+
+function _M.oauth2_jwks_cache_ttl()
+    return tonumber(env("OAUTH2_JWKS_CACHE_TTL", "300")) or 300
+end
+
+-- sub | client_id
+function _M.oauth2_rate_limit_key()
+    local v = env("OAUTH2_RATE_LIMIT_KEY", "sub"):lower()
+    if v == "client_id" then
+        return "client_id"
+    end
+    return "sub"
+end
+
+function _M.oauth2_default_limit()
+    return tonumber(env("OAUTH2_DEFAULT_LIMIT", env("DEFAULT_API_KEY_LIMIT", "1000"))) or 1000
+end
+
+function _M.oauth2_default_window()
+    return tonumber(env("OAUTH2_DEFAULT_WINDOW", env("DEFAULT_API_KEY_WINDOW", "60"))) or 60
+end
+
 return _M
