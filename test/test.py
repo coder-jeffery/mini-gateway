@@ -1,12 +1,13 @@
 import hmac
 import hashlib
+import os
 import time
 import uuid
 import json
 import requests
 
 ADMIN_SECRET = b"admin-secret-2026"
-BASE_URL = "http://127.0.0.1:8080/admin/gw"
+BASE_URL = os.environ.get("ADMIN_GW_V1_URL", "http://127.0.0.1:8080/admin/gw/v1")
 
 
 def signed_payload(action: str, **fields) -> dict:
@@ -20,11 +21,6 @@ def signed_payload(action: str, **fields) -> dict:
 
 
 if __name__ == "__main__":
-    payload = signed_payload(
-        "upsert_apikey",
-        api_key="abc123",
-        limit=20,
-        window=30,
-    )
+    payload = signed_payload("hmac_test")
     r = requests.post(BASE_URL, json=payload)
-    print(r.status_code, r.json())
+    print("hmac_test", r.status_code, r.json())

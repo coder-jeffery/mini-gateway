@@ -226,6 +226,16 @@ elseif action == "admin_whitelist_list" then
     end
     return resp(200, {ok=true, admin_whitelist=ips})
 
+elseif action == "hmac_test" then
+    redis_util.close(red)
+    return resp(200, {
+        ok = true,
+        msg = "hmac verified",
+        client_ip = client_ip,
+        ts = ts,
+        nonce = nonce,
+    })
+
 else
     redis_util.close(red)
     return resp(400, {ok=false, msg="unknown action"})
