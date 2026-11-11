@@ -40,7 +40,8 @@
 | | Prometheus `/metrics` | ❌ | **P1** |
 | | 日志采样、管理操作审计分类 | ❌ | P2 |
 | 管理 / 存储 | memory / redis / sqlite | ✅ 业务链路 | **P0** UI 与 v1 存储一致 |
-| 协议 | HTTP | ✅ | P4 WebSocket |
+| 协议 | HTTP | ✅ | P4 WebSocket | TCP/UDP ｜ HTTP/2 ｜ HTTP/3 ｜ WebSocket / SSE ｜ gRPC 代理 ｜ HTTP 转 gRPC ｜ Dubbo｜ MQTT｜Redis/MySQL 等协议感知｜MCP 转换
+
 
 ---
 

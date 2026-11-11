@@ -391,7 +391,7 @@ gateway_init_data() {
 gateway_require_openresty_ready() {
   assert_container_running gw-openresty
   local gw_port="${GATEWAY_PORT:-8080}"
-  wait_http "http://127.0.0.1:${gw_port}/" 15 || die "gateway not ready; run ./start-gateway.sh first"
+  wait_http "http://127.0.0.1:${gw_port}/ready" 15 || die "gateway not ready; run ./start-gateway.sh first"
 }
 
 # Phase 2: start OpenResty gateway
@@ -403,7 +403,7 @@ gateway_start_openresty() {
   local gw_port="${GATEWAY_PORT:-8080}"
 
   if docker inspect -f '{{.State.Running}}' gw-openresty 2>/dev/null | grep -q true; then
-    if wait_http "http://127.0.0.1:${gw_port}/" 5; then
+    if wait_http "http://127.0.0.1:${gw_port}/ready" 5; then
       log "gw-openresty already running on :${gw_port}"
       return 0
     fi
@@ -416,7 +416,7 @@ gateway_start_openresty() {
   compose_run up -d --build openresty
 
   assert_container_running gw-openresty
-  wait_http "http://127.0.0.1:${gw_port}/" || die "gateway not ready on :${gw_port} (docker logs gw-openresty)"
+  wait_http "http://127.0.0.1:${gw_port}/ready" || die "gateway not ready on :${gw_port} (docker logs gw-openresty)"
   log "gateway is ready on :${gw_port}"
 }
 
