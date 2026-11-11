@@ -1,0 +1,2 @@
+{"type":"server-started","port":56174,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:56174","screen_dir":"/Users/jeffery/workspace/gateway/mini-gateway/.superpowers/brainstorm/62359-1794402576/content","state_dir":"/Users/jeffery/workspace/gateway/mini-gateway/.superpowers/brainstorm/62359-1794402576/state"}
+fs.watch error: EMFILE: too many open files, watch

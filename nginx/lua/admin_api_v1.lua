@@ -3,6 +3,8 @@ local cjson = require "cjson"
 local ngx = ngx
 local hmac = require "resty.hmac"
 local apikey_admin = require "apikey_admin"
+local service_admin = require "service_admin"
+local store_mod = require "store"
 
 local ADMIN_SECRET = "admin-secret-2026"
 local SIGN_WINDOW = 60 -- signature timestamp tolerance (seconds)
@@ -235,6 +237,30 @@ elseif action == "hmac_test" then
         ts = ts,
         nonce = nonce,
     })
+
+elseif action == "service_create" or action == "service_update"
+    or action == "service_delete" or action == "service_get" or action == "service_list" then
+    redis_util.close(red)
+    local backend = store_mod.backend()
+    local store_handle, err_open = backend.new()
+    if not store_handle then
+        return resp(500, {ok=false, msg="storage error: " .. tostring(err_open)})
+    end
+    local code, data
+    if action == "service_create" then
+        code, data = service_admin.create_backend(backend, store_handle, req)
+    elseif action == "service_update" then
+        code, data = service_admin.update_backend(backend, store_handle, req)
+    elseif action == "service_delete" then
+        code, data = service_admin.delete_backend(backend, store_handle, req.id)
+    elseif action == "service_get" then
+        code, data = service_admin.get_backend(backend, store_handle, req.id)
+    else
+        code, data = service_admin.list_backend(backend, store_handle)
+    end
+    service_admin.clear_cache()
+    backend.close(store_handle)
+    return resp(code, data)
 
 else
     redis_util.close(red)
