@@ -46,6 +46,24 @@ GATEWAY_STORAGE=sqlite ./start.sh
 
 Default credentials after bootstrap: API key `mini-key`, admin Bearer token `mini-token`.
 
+### Business API CORS
+
+CORS is disabled by default and applies only to business routes handled by
+`location /`; `/admin/*`, `/health`, and `/ready` do not enable it.
+
+```bash
+GATEWAY_CORS_ENABLED=1 \
+GATEWAY_CORS_ALLOW_ORIGINS=http://localhost:3000,https://app.example.com \
+./start.sh
+```
+
+Allowed browser preflight requests terminate at the gateway with `204` before
+authentication. Actual business requests still run authentication and rate
+limiting, and CORS response headers are also added to gateway errors such as
+`401`, `429`, and `503`. See `.env.example` for methods, headers, exposed
+headers, max age, and credentials settings. `*` is not accepted when
+`GATEWAY_CORS_ALLOW_CREDENTIALS=1`.
+
 Option 1:
 ```bash
 curl -H "X-Api-Key: mini-key" http://127.0.0.1:8080

@@ -3,12 +3,17 @@
 local store_mod = require "store"
 local config = require "gateway_config"
 local oauth = require "oauth_validate"
+local cors = require "cors"
 local cjson = require "cjson"
 local ngx = ngx
 
 local CIRCUIT_BREAK_POLICY = "pass"
 local DEFAULT_RATE_LIMIT = 10
 local DEFAULT_RATE_WINDOW = 60
+
+if cors.is_preflight() then
+    return cors.handle_preflight()
+end
 
 local function deny(status, msg)
     ngx.status = status

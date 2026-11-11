@@ -58,6 +58,13 @@ services:
       OAUTH2_RATE_LIMIT_KEY: ${OAUTH2_RATE_LIMIT_KEY:-sub}
       OAUTH2_DEFAULT_LIMIT: ${OAUTH2_DEFAULT_LIMIT:-}
       OAUTH2_DEFAULT_WINDOW: ${OAUTH2_DEFAULT_WINDOW:-}
+      GATEWAY_CORS_ENABLED: ${GATEWAY_CORS_ENABLED:-0}
+      GATEWAY_CORS_ALLOW_ORIGINS: ${GATEWAY_CORS_ALLOW_ORIGINS:-}
+      GATEWAY_CORS_ALLOW_METHODS: ${GATEWAY_CORS_ALLOW_METHODS:-GET,POST,PUT,PATCH,DELETE,OPTIONS}
+      GATEWAY_CORS_ALLOW_HEADERS: ${GATEWAY_CORS_ALLOW_HEADERS:-Content-Type,Authorization,X-Api-Key,X-Request-Id}
+      GATEWAY_CORS_EXPOSE_HEADERS: ${GATEWAY_CORS_EXPOSE_HEADERS:-X-Request-Id,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset,Retry-After}
+      GATEWAY_CORS_MAX_AGE: ${GATEWAY_CORS_MAX_AGE:-600}
+      GATEWAY_CORS_ALLOW_CREDENTIALS: ${GATEWAY_CORS_ALLOW_CREDENTIALS:-0}
     volumes:
       - ./nginx/conf/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
       - ./nginx/lua:/usr/local/openresty/nginx/lua:ro
