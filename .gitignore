@@ -1,0 +1,5 @@
+# macOS Finder metadata
+.DS_Store
+
+# Local brainstorm session state (pid, logs, server-info, preview HTML)
+.superpowers/brainstorm/
