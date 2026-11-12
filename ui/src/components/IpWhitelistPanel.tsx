@@ -1,48 +1,41 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { adminAction } from "@/lib/admin-browser";
 import { Alert } from "./Alert";
+import { useLocale } from "./LocaleProvider";
 
 type Mode = "business" | "admin";
 type PanelMode = "list" | "create";
 
-const CONFIG: Record<
-  Mode,
-  {
-    title: string;
-    description: string;
-    listAction: "whitelist_list" | "admin_whitelist_list";
-    addAction: "whitelist_add" | "admin_whitelist_add";
-    delAction: "whitelist_del" | "admin_whitelist_del";
-    listKey: "whitelist" | "admin_whitelist";
-    addLabel: string;
-  }
-> = {
-  business: {
-    title: "业务 IP 白名单",
-    description:
-      "网关 access 阶段使用的 whitelist:ip。点击「新增 IP」在列表区域录入，保存后恢复列表。",
-    listAction: "whitelist_list",
-    addAction: "whitelist_add",
-    delAction: "whitelist_del",
-    listKey: "whitelist",
-    addLabel: "新增 IP",
-  },
-  admin: {
-    title: "管理端 IP 白名单",
-    description:
-      "admin_api_v1 校验的 admin:whitelist:ip。点击「新增 IP」在列表区域录入，保存后恢复列表。",
-    listAction: "admin_whitelist_list",
-    addAction: "admin_whitelist_add",
-    delAction: "admin_whitelist_del",
-    listKey: "admin_whitelist",
-    addLabel: "新增 IP",
-  },
-};
-
 export function IpWhitelistPanel({ mode }: { mode: Mode }) {
-  const cfg = CONFIG[mode];
+  const { messages: m, f } = useLocale();
+  const w = m.whitelist;
+  const c = m.common;
+
+  const cfg = useMemo(() => {
+    if (mode === "business") {
+      return {
+        title: w.businessTitle,
+        description: w.businessDesc,
+        listAction: "whitelist_list" as const,
+        addAction: "whitelist_add" as const,
+        delAction: "whitelist_del" as const,
+        listKey: "whitelist" as const,
+        addLabel: w.addIp,
+      };
+    }
+    return {
+      title: w.adminTitle,
+      description: w.adminDesc,
+      listAction: "admin_whitelist_list" as const,
+      addAction: "admin_whitelist_add" as const,
+      delAction: "admin_whitelist_del" as const,
+      listKey: "admin_whitelist" as const,
+      addLabel: w.addIp,
+    };
+  }, [mode, w]);
+
   const [ips, setIps] = useState<string[]>([]);
   const [panelMode, setPanelMode] = useState<PanelMode>("list");
   const [newIp, setNewIp] = useState("");
@@ -78,13 +71,13 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
       } catch (err) {
         setListStatus({
           tone: "err",
-          msg: err instanceof Error ? err.message : "加载失败",
+          msg: err instanceof Error ? err.message : w.loadFailed,
         });
       } finally {
         setListLoading(false);
       }
     },
-    [cfg.listAction, cfg.listKey],
+    [cfg.listAction, cfg.listKey, w.loadFailed],
   );
 
   useEffect(() => {
@@ -112,12 +105,12 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
     try {
       const res = await adminAction(cfg.addAction, { ip });
       closeForm();
-      setListStatus({ tone: "ok", msg: res.msg ?? "已添加" });
+      setListStatus({ tone: "ok", msg: res.msg ?? w.added });
       await refreshList(true);
     } catch (err) {
       setFormStatus({
         tone: "err",
-        msg: err instanceof Error ? err.message : "添加失败",
+        msg: err instanceof Error ? err.message : w.addFailed,
       });
     } finally {
       setFormSubmitting(false);
@@ -125,17 +118,17 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
   }
 
   async function onRemove(ip: string) {
-    if (!confirm(`从白名单移除「${ip}」？`)) return;
+    if (!confirm(f(w.removeConfirm, { ip }))) return;
     setListLoading(true);
     setListStatus(null);
     try {
       const res = await adminAction(cfg.delAction, { ip });
-      setListStatus({ tone: "ok", msg: res.msg ?? "已移除" });
+      setListStatus({ tone: "ok", msg: res.msg ?? w.removed });
       await refreshList(true);
     } catch (err) {
       setListStatus({
         tone: "err",
-        msg: err instanceof Error ? err.message : "移除失败",
+        msg: err instanceof Error ? err.message : w.removeFailed,
       });
       setListLoading(false);
     }
@@ -144,30 +137,26 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
   const showingForm = panelMode === "create";
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-lg font-semibold tracking-tight">{cfg.title}</h2>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          {cfg.description}
-        </p>
+        <h2 className="gw-panel-title">{cfg.title}</h2>
+        <p className="gw-panel-desc">{cfg.description}</p>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/80">
-          <span className="text-sm font-medium">
-            {showingForm
-              ? `${cfg.addLabel} — ${cfg.title}`
-              : `列表（共 ${ips.length} 条）`}
+      <div className="gw-card">
+        <div className="gw-card-toolbar">
+          <span className="gw-toolbar-label">
+            {showingForm ? cfg.addLabel : f(c.totalCount, { count: ips.length })}
           </span>
-          <div className="flex flex-wrap gap-2">
+          <div className="gw-toolbar-actions">
             {showingForm ? (
               <button
                 type="button"
                 disabled={formSubmitting}
                 onClick={closeForm}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm disabled:opacity-50 dark:border-zinc-700"
+                className="gw-btn gw-btn-secondary"
               >
-                返回列表
+                {c.backToList}
               </button>
             ) : (
               <>
@@ -175,7 +164,7 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
                   type="button"
                   disabled={listLoading}
                   onClick={openCreate}
-                  className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+                  className="gw-btn gw-btn-primary"
                 >
                   {cfg.addLabel}
                 </button>
@@ -183,9 +172,9 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
                   type="button"
                   disabled={listLoading}
                   onClick={() => void refreshList()}
-                  className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm disabled:opacity-50 dark:border-zinc-700"
+                  className="gw-btn gw-btn-secondary"
                 >
-                  刷新列表
+                  {c.refresh}
                 </button>
               </>
             )}
@@ -193,97 +182,80 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
         </div>
 
         {listStatus && !showingForm ? (
-          <div className="border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+          <div className="gw-alert-bar">
             <Alert tone={listStatus.tone} message={listStatus.msg} />
           </div>
         ) : null}
 
         {showingForm ? (
-          <form
-            onSubmit={onSubmit}
-            className="flex min-h-[240px] flex-col px-5 py-6"
-          >
-            {formStatus ? (
-              <div className="mb-4">
-                <Alert tone={formStatus.tone} message={formStatus.msg} />
-              </div>
-            ) : null}
+          <form onSubmit={onSubmit} className="gw-form min-h-[220px]">
+            {formStatus ? <Alert tone={formStatus.tone} message={formStatus.msg} /> : null}
 
-            <div className="grid flex-1 gap-4 content-start">
-              <label className="grid max-w-md gap-1 text-sm">
-                <span>IP 地址</span>
-                <input
-                  required
-                  autoFocus
-                  value={newIp}
-                  onChange={(e) => setNewIp(e.target.value)}
-                  placeholder="127.0.0.1"
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-950"
-                />
-              </label>
-            </div>
+            <label className="gw-label max-w-md">
+              <span>{w.ipAddress}</span>
+              <input
+                required
+                autoFocus
+                value={newIp}
+                onChange={(e) => setNewIp(e.target.value)}
+                placeholder="127.0.0.1"
+                className="gw-input gw-input-mono"
+              />
+            </label>
 
-            <div className="mt-6 flex items-center justify-end gap-2 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+            <div className="gw-form-footer">
               <button
                 type="button"
                 disabled={formSubmitting}
                 onClick={closeForm}
-                className="rounded-md border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-700"
+                className="gw-btn gw-btn-secondary"
               >
-                取消
+                {c.cancel}
               </button>
               <button
                 type="submit"
                 disabled={formSubmitting}
-                className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+                className="gw-btn gw-btn-primary"
               >
-                {formSubmitting ? "保存中…" : "保存"}
+                {formSubmitting ? c.saving : c.save}
               </button>
             </div>
           </form>
         ) : (
-          <div className="relative">
+          <div className="gw-table-wrap">
             {listLoading ? (
-              <div className="absolute inset-0 z-10 flex min-h-[120px] items-center justify-center bg-white/60 dark:bg-zinc-950/60">
-                <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                  列表更新中…
-                </span>
+              <div className="gw-overlay min-h-[120px]">
+                <span>{c.listUpdating}</span>
               </div>
             ) : null}
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-zinc-200 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
+            <table className="gw-table">
+              <thead>
                 <tr>
-                  <th className="px-4 py-3 font-medium">IP</th>
-                  <th className="px-4 py-3 font-medium w-28">操作</th>
+                  <th>IP</th>
+                  <th className="w-28">{c.actions}</th>
                 </tr>
               </thead>
               <tbody>
                 {ips.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={2}
-                      className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400"
-                    >
+                    <td colSpan={2} className="gw-empty">
                       {listLoading
-                        ? "加载中…"
-                        : `暂无 IP，点击「${cfg.addLabel}」`}
+                        ? c.loading
+                        : f(w.empty, { action: cfg.addLabel })}
                     </td>
                   </tr>
                 ) : (
                   ips.map((ip) => (
-                    <tr
-                      key={ip}
-                      className="border-t border-zinc-100 dark:border-zinc-800"
-                    >
-                      <td className="px-4 py-3 font-mono">{ip}</td>
-                      <td className="px-4 py-3">
+                    <tr key={ip}>
+                      <td className="font-mono text-[0.8125rem]">{ip}</td>
+                      <td>
                         <button
                           type="button"
                           disabled={listLoading}
                           onClick={() => void onRemove(ip)}
-                          className="text-sm text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                          className="gw-btn-link gw-btn-link-danger"
                         >
-                          移除
+                          {c.remove}
                         </button>
                       </td>
                     </tr>

@@ -46,6 +46,46 @@ GATEWAY_STORAGE=sqlite ./start.sh
 
 Default credentials after bootstrap: API key `mini-key`, admin Bearer token `mini-token`.
 
+### Service routing (Redis / memory / sqlite)
+
+Each Service binds a `path_prefix` to an `upstream_url` and optional per-Service
+CORS policy. Matching uses longest prefix with path boundaries (`/api/orders`
+does not match `/api/orders-v2`). The gateway forwards the original URI and
+query string to the upstream and sets `Host` from the upstream URL host.
+
+Manage Services via `POST /admin/gw/v1` actions `service_create`,
+`service_update`, `service_delete`, `service_get`, `service_list`, or the
+**Service CORS** tab in the admin UI. Snapshots are cached in each OpenResty
+worker for about 5 seconds; admin writes flush the local cache immediately.
+
+```bash
+# Example (HMAC signing required — see test/hmac_client.py)
+# path_prefix=/api/orders upstream=https://backend.example.com
+```
+
+When no Service matches, the default upstream remains `https://httpbin.org/get`
+unless you change `$gateway_proxy_url` in `nginx.conf`.
+
+### Business API CORS
+
+CORS is disabled by default and applies only to business routes handled by
+`location /`; `/admin/*`, `/health`, and `/ready` do not enable it. When a
+request matches a Service with `cors_enabled`, that Service policy overrides
+global `GATEWAY_CORS_*` for the request.
+
+```bash
+GATEWAY_CORS_ENABLED=1 \
+GATEWAY_CORS_ALLOW_ORIGINS=http://localhost:3000,https://app.example.com \
+./start.sh
+```
+
+Allowed browser preflight requests terminate at the gateway with `204` before
+authentication. Actual business requests still run authentication and rate
+limiting, and CORS response headers are also added to gateway errors such as
+`401`, `429`, and `503`. See `.env.example` for methods, headers, exposed
+headers, max age, and credentials settings. `*` is not accepted when
+`GATEWAY_CORS_ALLOW_CREDENTIALS=1`.
+
 Option 1:
 ```bash
 curl -H "X-Api-Key: mini-key" http://127.0.0.1:8080

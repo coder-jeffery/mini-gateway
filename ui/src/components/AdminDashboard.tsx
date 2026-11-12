@@ -1,60 +1,62 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ApiKeyPanel } from "./ApiKeyPanel";
 import { IpWhitelistPanel } from "./IpWhitelistPanel";
+import { LanguageSwitch } from "./LanguageSwitch";
+import { useLocale } from "./LocaleProvider";
+import { ServiceCorsPanel } from "./ServiceCorsPanel";
 
-type Tab = "apikeys" | "business-ip" | "admin-ip";
-
-const TABS: { id: Tab; label: string }[] = [
-  { id: "apikeys", label: "API Key" },
-  { id: "business-ip", label: "业务白名单" },
-  { id: "admin-ip", label: "管理白名单" },
-];
+type Tab = "apikeys" | "business-ip" | "admin-ip" | "services";
 
 export function AdminDashboard() {
+  const { messages: m } = useLocale();
   const [tab, setTab] = useState<Tab>("apikeys");
 
+  const tabs: { id: Tab; label: string }[] = useMemo(
+    () => [
+      { id: "apikeys", label: m.dashboard.tabApiKeys },
+      { id: "services", label: m.dashboard.tabServices },
+      { id: "business-ip", label: m.dashboard.tabBusinessIp },
+      { id: "admin-ip", label: m.dashboard.tabAdminIp },
+    ],
+    [m],
+  );
+
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6">
-      <header className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-widest text-zinc-500">
-          Mini Gateway
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight">管理后台</h1>
-        <p className="max-w-xl text-sm text-zinc-500 dark:text-zinc-400">
-          各模块采用「列表 + 点击新增切换窗体、保存后局部刷新列表」。接口：{" "}
-          <code className="rounded bg-zinc-100 px-1 font-mono text-xs dark:bg-zinc-800">
-            /admin/gw/v1
-          </code>
-          （HMAC）。需 Redis 模式且调用方 IP 在 admin 白名单内。
+    <div className="gw-shell">
+      <header className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-col gap-3">
+            <p className="gw-eyebrow">{m.dashboard.eyebrow}</p>
+            <h1 className="gw-page-title">{m.dashboard.title}</h1>
+          </div>
+          <LanguageSwitch />
+        </div>
+        <p className="gw-lead">
+          {m.dashboard.leadBefore}{" "}
+          <code className="gw-code">/admin/gw/v1</code> {m.dashboard.leadAfter}
         </p>
       </header>
 
-      <nav
-        className="flex flex-wrap gap-2 border-b border-zinc-200 pb-1 dark:border-zinc-800"
-        aria-label="Sections"
-      >
-        {TABS.map((t) => (
+      <nav className="gw-tabs" aria-label={m.dashboard.navAria}>
+        {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`rounded-t-md px-3 py-2 text-sm font-medium transition-colors ${
-              tab === t.id
-                ? "border-b-2 border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100"
-                : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
-            }`}
+            className={`gw-tab ${tab === t.id ? "gw-tab-active" : ""}`}
           >
             {t.label}
           </button>
         ))}
       </nav>
 
-      <section>
+      <section className="min-w-0">
         {tab === "apikeys" ? <ApiKeyPanel /> : null}
         {tab === "business-ip" ? <IpWhitelistPanel mode="business" /> : null}
         {tab === "admin-ip" ? <IpWhitelistPanel mode="admin" /> : null}
+        {tab === "services" ? <ServiceCorsPanel /> : null}
       </section>
     </div>
   );

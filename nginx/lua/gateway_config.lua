@@ -92,4 +92,39 @@ function _M.oauth2_default_window()
     return tonumber(env("OAUTH2_DEFAULT_WINDOW", env("DEFAULT_API_KEY_WINDOW", "60"))) or 60
 end
 
+function _M.cors_enabled()
+    return env("GATEWAY_CORS_ENABLED", "0") == "1"
+end
+
+function _M.cors_allow_origins()
+    return env("GATEWAY_CORS_ALLOW_ORIGINS", "")
+end
+
+function _M.cors_allow_methods()
+    return env("GATEWAY_CORS_ALLOW_METHODS", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+end
+
+function _M.cors_allow_headers()
+    return env(
+        "GATEWAY_CORS_ALLOW_HEADERS",
+        "Content-Type,Authorization,X-Api-Key,X-Request-Id"
+    )
+end
+
+function _M.cors_expose_headers()
+    return env(
+        "GATEWAY_CORS_EXPOSE_HEADERS",
+        "X-Request-Id,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset,Retry-After"
+    )
+end
+
+function _M.cors_max_age()
+    local value = tonumber(env("GATEWAY_CORS_MAX_AGE", "600")) or 600
+    return math.max(0, math.floor(value))
+end
+
+function _M.cors_allow_credentials()
+    return env("GATEWAY_CORS_ALLOW_CREDENTIALS", "0") == "1"
+end
+
 return _M

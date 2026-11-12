@@ -1,5 +1,10 @@
 import { AdminDashboard } from "@/components/AdminDashboard";
+import { LocaleProvider } from "@/components/LocaleProvider";
 
 export default function Home() {
-  return <AdminDashboard />;
+  return (
+    <LocaleProvider>
+      <AdminDashboard />
+    </LocaleProvider>
+  );
 }

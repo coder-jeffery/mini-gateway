@@ -4,12 +4,17 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { adminAction } from "@/lib/admin-browser";
 import type { ApiKeyRecord, ApiKeyListResponse } from "@/lib/admin-types";
 import { Alert } from "./Alert";
+import { useLocale } from "./LocaleProvider";
 
 const PAGE_SIZE = 10;
 
 type PanelMode = "list" | "create" | "edit";
 
 export function ApiKeyPanel() {
+  const { messages: m, f } = useLocale();
+  const t = m.apiKey;
+  const c = m.common;
+
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -49,12 +54,12 @@ export function ApiKeyPanel() {
     } catch (err) {
       setListStatus({
         tone: "err",
-        msg: err instanceof Error ? err.message : "加载列表失败",
+        msg: err instanceof Error ? err.message : t.loadFailed,
       });
     } finally {
       setListLoading(false);
     }
-  }, []);
+  }, [t.loadFailed]);
 
   useEffect(() => {
     void refreshList(1);
@@ -101,14 +106,14 @@ export function ApiKeyPanel() {
       closeForm();
       setListStatus({
         tone: "ok",
-        msg: res.msg ?? (isCreate ? "已创建" : "已更新"),
+        msg: res.msg ?? (isCreate ? t.created : t.updated),
       });
       const targetPage = isCreate ? 1 : page;
       await refreshList(targetPage, true);
     } catch (err) {
       setFormStatus({
         tone: "err",
-        msg: err instanceof Error ? err.message : "保存失败",
+        msg: err instanceof Error ? err.message : t.saveFailed,
       });
     } finally {
       setFormSubmitting(false);
@@ -116,7 +121,7 @@ export function ApiKeyPanel() {
   }
 
   async function onDelete(key: string) {
-    if (!confirm(`删除 API Key「${key}」？`)) return;
+    if (!confirm(f(t.deleteConfirm, { key }))) return;
     setListLoading(true);
     setListStatus(null);
     try {
@@ -124,13 +129,13 @@ export function ApiKeyPanel() {
       if (mode === "edit" && editingKey === key) {
         closeForm();
       }
-      setListStatus({ tone: "ok", msg: res.msg ?? "已删除" });
+      setListStatus({ tone: "ok", msg: res.msg ?? t.deleted });
       const nextPage = rows.length === 1 && page > 1 ? page - 1 : page;
       await refreshList(nextPage, true);
     } catch (err) {
       setListStatus({
         tone: "err",
-        msg: err instanceof Error ? err.message : "删除失败",
+        msg: err instanceof Error ? err.message : t.deleteFailed,
       });
       setListLoading(false);
     }
@@ -139,32 +144,30 @@ export function ApiKeyPanel() {
   const showingForm = mode === "create" || mode === "edit";
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-lg font-semibold tracking-tight">API Key</h2>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          点击「新增 API Key」，列表区域切换为录入窗体；保存后恢复列表并刷新。
-        </p>
+        <h2 className="gw-panel-title">{t.title}</h2>
+        <p className="gw-panel-desc">{t.desc}</p>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/80">
-          <span className="text-sm font-medium">
+      <div className="gw-card">
+        <div className="gw-card-toolbar">
+          <span className="gw-toolbar-label">
             {showingForm
               ? mode === "create"
-                ? "新增 API Key"
-                : "编辑 API Key"
-              : `列表（共 ${total} 条）`}
+                ? t.createTitle
+                : t.editTitle
+              : f(c.totalCount, { count: total })}
           </span>
-          <div className="flex flex-wrap gap-2">
+          <div className="gw-toolbar-actions">
             {showingForm ? (
               <button
                 type="button"
                 disabled={formSubmitting}
                 onClick={closeForm}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm disabled:opacity-50 dark:border-zinc-700"
+                className="gw-btn gw-btn-secondary"
               >
-                返回列表
+                {c.backToList}
               </button>
             ) : (
               <>
@@ -172,17 +175,17 @@ export function ApiKeyPanel() {
                   type="button"
                   disabled={listLoading}
                   onClick={openCreate}
-                  className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+                  className="gw-btn gw-btn-primary"
                 >
-                  新增 API Key
+                  {c.add}
                 </button>
                 <button
                   type="button"
                   disabled={listLoading}
                   onClick={() => void refreshList(page)}
-                  className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm disabled:opacity-50 dark:border-zinc-700"
+                  className="gw-btn gw-btn-secondary"
                 >
-                  刷新列表
+                  {c.refresh}
                 </button>
               </>
             )}
@@ -190,136 +193,119 @@ export function ApiKeyPanel() {
         </div>
 
         {listStatus && !showingForm ? (
-          <div className="border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+          <div className="gw-alert-bar">
             <Alert tone={listStatus.tone} message={listStatus.msg} />
           </div>
         ) : null}
 
         {showingForm ? (
-          <form
-            onSubmit={onSubmit}
-            className="flex min-h-[320px] flex-col px-5 py-6"
-          >
-            {formStatus ? (
-              <div className="mb-4">
-                <Alert tone={formStatus.tone} message={formStatus.msg} />
-              </div>
-            ) : null}
+          <form onSubmit={onSubmit} className="gw-form min-h-[320px]">
+            {formStatus ? <Alert tone={formStatus.tone} message={formStatus.msg} /> : null}
 
             <div className="grid flex-1 gap-4 content-start">
-              <label className="grid gap-1 text-sm">
-                <span>API Key</span>
+              <label className="gw-label">
+                <span>{t.labelKey}</span>
                 <input
                   required
                   autoFocus
                   readOnly={mode === "edit"}
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm read-only:opacity-70 dark:border-zinc-700 dark:bg-zinc-950"
+                  className="gw-input gw-input-mono read-only:opacity-60"
                   placeholder="abc123"
                 />
               </label>
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="grid gap-1 text-sm">
-                  <span>Limit</span>
+                <label className="gw-label">
+                  <span>{t.labelLimit}</span>
                   <input
                     required
                     type="number"
                     min={1}
                     value={limit}
                     onChange={(e) => setLimit(e.target.value)}
-                    className="rounded-md border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
+                    className="gw-input"
                   />
                 </label>
-                <label className="grid gap-1 text-sm">
-                  <span>Window（秒）</span>
+                <label className="gw-label">
+                  <span>{t.labelWindow}</span>
                   <input
                     required
                     type="number"
                     min={1}
                     value={windowSec}
                     onChange={(e) => setWindowSec(e.target.value)}
-                    className="rounded-md border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
+                    className="gw-input"
                   />
                 </label>
               </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-2 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+            <div className="gw-form-footer">
               <button
                 type="button"
                 disabled={formSubmitting}
                 onClick={closeForm}
-                className="rounded-md border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-700"
+                className="gw-btn gw-btn-secondary"
               >
-                取消
+                {c.cancel}
               </button>
               <button
                 type="submit"
                 disabled={formSubmitting}
-                className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+                className="gw-btn gw-btn-primary"
               >
-                {formSubmitting ? "保存中…" : "保存"}
+                {formSubmitting ? c.saving : c.save}
               </button>
             </div>
           </form>
         ) : (
           <>
-            <div className="relative">
+            <div className="gw-table-wrap">
               {listLoading ? (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 dark:bg-zinc-950/60">
-                  <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                    列表更新中…
-                  </span>
+                <div className="gw-overlay gw-empty">
+                  <span>{c.listUpdating}</span>
                 </div>
               ) : null}
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-zinc-200 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
+              <table className="gw-table">
+                <thead>
                   <tr>
-                    <th className="px-4 py-3 font-medium">API Key</th>
-                    <th className="px-4 py-3 font-medium">Limit</th>
-                    <th className="px-4 py-3 font-medium">Window</th>
-                    <th className="px-4 py-3 font-medium w-36">操作</th>
+                    <th>{t.labelKey}</th>
+                    <th>{t.labelLimit}</th>
+                    <th>{t.labelWindow}</th>
+                    <th className="w-36">{c.actions}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.length === 0 ? (
                     <tr>
-                      <td
-                        colSpan={4}
-                        className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400"
-                      >
-                        {listLoading
-                          ? "加载中…"
-                          : "暂无 API Key，点击「新增 API Key」"}
+                      <td colSpan={4} className="gw-empty">
+                        {listLoading ? c.loading : t.empty}
                       </td>
                     </tr>
                   ) : (
                     rows.map((row) => (
-                      <tr
-                        key={row.api_key}
-                        className="border-t border-zinc-100 dark:border-zinc-800"
-                      >
-                        <td className="px-4 py-3 font-mono">{row.api_key}</td>
-                        <td className="px-4 py-3">{row.limit}</td>
-                        <td className="px-4 py-3">{row.window}s</td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-3">
+                      <tr key={row.api_key}>
+                        <td className="font-mono text-[0.8125rem]">{row.api_key}</td>
+                        <td>{row.limit}</td>
+                        <td>{row.window}s</td>
+                        <td>
+                          <div className="flex gap-4">
                             <button
                               type="button"
                               disabled={listLoading}
                               onClick={() => openEdit(row)}
-                              className="text-sm hover:underline disabled:opacity-50"
+                              className="gw-btn-link"
                             >
-                              编辑
+                              {c.edit}
                             </button>
                             <button
                               type="button"
                               disabled={listLoading}
                               onClick={() => void onDelete(row.api_key)}
-                              className="text-sm text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                              className="gw-btn-link gw-btn-link-danger"
                             >
-                              删除
+                              {c.delete}
                             </button>
                           </div>
                         </td>
@@ -330,26 +316,24 @@ export function ApiKeyPanel() {
               </table>
             </div>
             {totalPages > 1 ? (
-              <div className="flex items-center justify-between border-t border-zinc-200 px-4 py-3 dark:border-zinc-800">
-                <span className="text-sm text-zinc-500">
-                  第 {page} / {totalPages} 页
-                </span>
-                <div className="flex gap-2">
+              <div className="gw-pagination">
+                <span>{f(c.pageOf, { page, total: totalPages })}</span>
+                <div className="gw-toolbar-actions">
                   <button
                     type="button"
                     disabled={listLoading || page <= 1}
                     onClick={() => void refreshList(page - 1)}
-                    className="rounded-md border border-zinc-300 px-3 py-1 text-sm disabled:opacity-40 dark:border-zinc-700"
+                    className="gw-btn gw-btn-secondary"
                   >
-                    上一页
+                    {c.prevPage}
                   </button>
                   <button
                     type="button"
                     disabled={listLoading || page >= totalPages}
                     onClick={() => void refreshList(page + 1)}
-                    className="rounded-md border border-zinc-300 px-3 py-1 text-sm disabled:opacity-40 dark:border-zinc-700"
+                    className="gw-btn gw-btn-secondary"
                   >
-                    下一页
+                    {c.nextPage}
                   </button>
                 </div>
               </div>
