@@ -1,6 +1,9 @@
 local store_mod = require "store"
+local upstream_passive = require "upstream_passive"
 local cjson = require "cjson"
 local ngx = ngx
+
+upstream_passive.observe()
 
 local function log_timer(premature, log_data)
     if premature then

@@ -92,4 +92,116 @@ function _M.oauth2_default_window()
     return tonumber(env("OAUTH2_DEFAULT_WINDOW", env("DEFAULT_API_KEY_WINDOW", "60"))) or 60
 end
 
+local function split_csv(raw)
+    local out = {}
+    for part in string.gmatch(raw, "[^,%s]+") do
+        out[#out + 1] = part
+    end
+    return out
+end
+
+function _M.upstream_scheme()
+    local v = env("GATEWAY_UPSTREAM_SCHEME", "https"):lower()
+    if v == "http" then
+        return "http"
+    end
+    return "https"
+end
+
+function _M.upstream_proxy_path()
+    local v = env("GATEWAY_UPSTREAM_PATH", "/get")
+    if v == "" or v:sub(1, 1) ~= "/" then
+        return "/" .. v
+    end
+    return v
+end
+
+function _M.upstream_health_path()
+    local v = env("GATEWAY_UPSTREAM_HEALTH_PATH", "/status/200")
+    if v == "" or v:sub(1, 1) ~= "/" then
+        return "/" .. v
+    end
+    return v
+end
+
+function _M.upstream_health_host()
+    local v = env("GATEWAY_UPSTREAM_HOST", "")
+    if v == "" then
+        return nil
+    end
+    return v
+end
+
+function _M.upstream_health_interval()
+    return tonumber(env("GATEWAY_UPSTREAM_HEALTH_INTERVAL", "15")) or 15
+end
+
+function _M.upstream_health_timeout_ms()
+    return tonumber(env("GATEWAY_UPSTREAM_HEALTH_TIMEOUT_MS", "3000")) or 3000
+end
+
+function _M.upstream_health_fail_threshold()
+    return tonumber(env("GATEWAY_UPSTREAM_HEALTH_FAIL_THRESHOLD", "3")) or 3
+end
+
+function _M.upstream_health_pass_threshold()
+    return tonumber(env("GATEWAY_UPSTREAM_HEALTH_PASS_THRESHOLD", "2")) or 2
+end
+
+function _M.upstream_health_status_range()
+    local raw = env("GATEWAY_UPSTREAM_HEALTH_OK_STATUS", "200-399")
+    local lo, hi = raw:match("^(%d+)%-(%d+)$")
+    if lo and hi then
+        return tonumber(lo), tonumber(hi)
+    end
+    local one = tonumber(raw)
+    if one then
+        return one, one
+    end
+    return 200, 399
+end
+
+function _M.upstream_max_tries()
+    local n = tonumber(env("GATEWAY_UPSTREAM_MAX_TRIES", "2")) or 2
+    if n < 1 then
+        return 1
+    end
+    if n > 5 then
+        return 5
+    end
+    return n
+end
+
+function _M.upstream_timeouts()
+    return {
+        connect = tonumber(env("GATEWAY_UPSTREAM_CONNECT_TIMEOUT", "5")) or 5,
+        send = tonumber(env("GATEWAY_UPSTREAM_SEND_TIMEOUT", "60")) or 60,
+        read = tonumber(env("GATEWAY_UPSTREAM_READ_TIMEOUT", "60")) or 60,
+    }
+end
+
+-- GATEWAY_UPSTREAM_PEERS: host:port[:weight], comma-separated
+function _M.upstream_peers()
+    local raw = env("GATEWAY_UPSTREAM_PEERS", "httpbin.org:443")
+    local peers = {}
+    for _, item in ipairs(split_csv(raw)) do
+        local host, port, weight = item:match("^([^:]+):(%d+):(%d+)$")
+        if not host then
+            host, port = item:match("^([^:]+):(%d+)$")
+            weight = 1
+        end
+        if host and port then
+            peers[#peers + 1] = {
+                host = host,
+                port = tonumber(port),
+                weight = tonumber(weight) or 1,
+            }
+        end
+    end
+    if #peers == 0 then
+        peers[1] = { host = "httpbin.org", port = 443, weight = 1 }
+    end
+    return peers
+end
+
 return _M

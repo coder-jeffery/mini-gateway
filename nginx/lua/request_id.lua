@@ -1,4 +1,5 @@
 local ngx = ngx
+local config = require "gateway_config"
 local bit = bit
 
 local function fallback_id()
@@ -44,3 +45,12 @@ local req_id = uuid_v4()
 ngx.ctx.request_id = req_id
 ngx.var.ctx_request_id = req_id
 ngx.header["X-Request-Id"] = req_id
+
+ngx.var.gateway_upstream_scheme = config.upstream_scheme()
+ngx.var.gateway_upstream_path = config.upstream_proxy_path()
+local peers = config.upstream_peers()
+local host_header = config.upstream_health_host()
+if not host_header or host_header == "" then
+    host_header = peers[1] and peers[1].host or ""
+end
+ngx.var.gateway_upstream_host = host_header
