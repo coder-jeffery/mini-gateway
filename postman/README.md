@@ -29,3 +29,8 @@
 - `hmac_test`、`whitelist_list`（Pre-request 计算 ts/nonce/sign）
 
 JWT 与 `test/jwt_client.py` 使用相同 payload 规则；修改 `oauth2_jwt_secret`、`gateway_base_url` 等在 Environment 中即可。
+
+luaJIT
+Golang
+LLM
+
