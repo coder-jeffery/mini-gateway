@@ -1,10 +1,11 @@
 
 operation doc:
+    v0 /admin/gw 使用存储中的 Bearer token（启动变量 DEFAULT_ADMIN_TOKEN），不使用 HMAC 密钥。
     case 1: 创建 / 更新 apikey：abc123，30s 最多 20 次
         curl -X POST http://127.0.0.1:8080/admin/gw \
+        -H "Authorization: Bearer mini-token" \
         -H "Content-Type: application/json" \
         -d '{
-            "admin_secret":"admin-secret-2026",
             "action":"upsert_apikey",
             "api_key":"abc123",
             "limit":20,
@@ -14,9 +15,9 @@ operation doc:
 
     case 2:  添加 IP 到白名单
         curl -X POST http://127.0.0.1:8080/admin/gw \
+        -H "Authorization: Bearer mini-token" \
         -H "Content-Type: application/json" \
         -d '{
-            "admin_secret":"admin-secret-2026",
             "action":"whitelist_add",
             "ip":"127.0.0.1"
         }'
@@ -24,26 +25,26 @@ operation doc:
     case 3:移除白名单 IP
 
     curl -X POST http://127.0.0.1:8080/admin/gw \
+    -H "Authorization: Bearer mini-token" \
     -H "Content-Type: application/json" \
     -d '{
-        "admin_secret":"admin-secret-2026",
         "action":"whitelist_del",
         "ip":"127.0.0.1"
     }'
 
     case4 :查询全部白名单 IP
     curl -X POST http://127.0.0.1:8080/admin/gw \
+    -H "Authorization: Bearer mini-token" \
     -H "Content-Type: application/json" \
     -d '{
-        "admin_secret":"admin-secret-2026",
         "action":"whitelist_list"
     }'
 
     case 5:
     curl -X POST http://127.0.0.1:8080/admin/gw \
+    -H "Authorization: Bearer mini-token" \
     -H "Content-Type: application/json" \
     -d '{
-        "admin_secret":"admin-secret-2026",
         "action":"del_apikey",
         "api_key":"abc123"
     }'
@@ -85,7 +86,8 @@ HMAC 管理接口 v1（/admin/gw/v1，POST + 签名；管理 IP 需在白名单�
 
     与上面业务 curl 对应的 HMAC 探测（同样 curl -i，验签 action hmac_test）：
 
-        SECRET='admin-secret-2026'
+        # export GATEWAY_ADMIN_SECRET='<at least 16 characters; no built-in default>'
+        SECRET="$GATEWAY_ADMIN_SECRET"
         TS=$(date +%s)
         NONCE=$(uuidgen)
         SIGN=$(printf '%s' "${TS}:${NONCE}" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')
@@ -106,7 +108,7 @@ HMAC 管理接口 v1（/admin/gw/v1）：
 
     任意 v1 action 示例：
         ./test/hmac_call.sh whitelist_list
-        GATEWAY_ADMIN_SECRET=admin-secret-2026 ADMIN_GW_V1_URL=http://127.0.0.1:8080/admin/gw/v1 ./test/hmac_call.sh apikey_list '{"page":1,"page_size":10}'
+        ADMIN_GW_V1_URL=http://127.0.0.1:8080/admin/gw/v1 ./test/hmac_call.sh apikey_list '{"page":1,"page_size":10}'
 
     签名规则：sign = HMAC-SHA256(secret, "{ts}:{nonce}").hexdigest()，body 需含 ts、nonce、sign、action。
 

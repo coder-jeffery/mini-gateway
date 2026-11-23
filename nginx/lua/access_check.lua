@@ -3,12 +3,43 @@
 local store_mod = require "store"
 local config = require "gateway_config"
 local oauth = require "oauth_validate"
+local cors = require "cors"
+local service_router = require "service_router"
 local cjson = require "cjson"
 local ngx = ngx
 
 local CIRCUIT_BREAK_POLICY = "pass"
 local DEFAULT_RATE_LIMIT = 10
 local DEFAULT_RATE_WINDOW = 60
+
+local matched, peers, scheme, host, route_err = service_router.resolve(ngx.var.uri)
+if route_err then
+    ngx.status = 503
+    ngx.header["Content-Type"] = "application/json"
+    ngx.say(cjson.encode({ code = 503, msg = "service configuration unavailable" }))
+    return ngx.exit(503)
+end
+ngx.ctx.gateway_service = matched
+if matched then
+    ngx.ctx.gateway_service_peers = peers
+    ngx.var.gateway_upstream_scheme = scheme
+    if host and host ~= "" then
+        ngx.var.gateway_upstream_host = host
+    end
+    ngx.var.gateway_upstream_path = ""
+else
+    local fixed_path = config.upstream_proxy_path()
+    if fixed_path then
+        ngx.var.gateway_upstream_path = fixed_path
+        ngx.req.set_uri_args({})
+    else
+        ngx.var.gateway_upstream_path = ""
+    end
+end
+
+if cors.is_preflight() then
+    return cors.handle_preflight()
+end
 
 local function deny(status, msg)
     ngx.status = status

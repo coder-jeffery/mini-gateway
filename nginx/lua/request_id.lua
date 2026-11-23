@@ -47,17 +47,11 @@ ngx.var.ctx_request_id = req_id
 ngx.header["X-Request-Id"] = req_id
 
 ngx.var.gateway_upstream_scheme = config.upstream_scheme()
+-- access_check applies the legacy fixed path only when no service matches.
+-- Clearing args here would drop the query before that decision and would
+-- also normalize an encoded path.
 local fixed_path = config.upstream_proxy_path()
-if fixed_path then
-    -- Legacy override. Clear client args so nginx cannot append $args on
-    -- versions that do so when the proxy URI has no query of its own.
-    -- Never clear args in passthrough mode: that marks the URI rewritten
-    -- and the path is normalized (%2F becomes /).
-    ngx.var.gateway_upstream_path = fixed_path
-    ngx.req.set_uri_args({})
-else
-    ngx.var.gateway_upstream_path = ""
-end
+ngx.var.gateway_upstream_path = fixed_path or ""
 local peers = config.upstream_peers()
 local host_header = config.upstream_health_host()
 if not host_header or host_header == "" then

@@ -12,7 +12,11 @@ EXTRA_JSON="${2:-{}}"
 
 export ROOT
 export ADMIN_GW_V1_URL="${ADMIN_GW_V1_URL:-http://127.0.0.1:8080/admin/gw/v1}"
-export GATEWAY_ADMIN_SECRET="${GATEWAY_ADMIN_SECRET:-admin-secret-2026}"
+if [ -z "${GATEWAY_ADMIN_SECRET:-}" ] || [ "${#GATEWAY_ADMIN_SECRET}" -lt 16 ]; then
+  echo "GATEWAY_ADMIN_SECRET is required and must be at least 16 characters" >&2
+  exit 1
+fi
+export GATEWAY_ADMIN_SECRET
 export HMAC_CALL_ACTION="$ACTION"
 export HMAC_CALL_EXTRA="$EXTRA_JSON"
 

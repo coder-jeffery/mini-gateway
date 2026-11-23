@@ -13,6 +13,11 @@ const ACTIONS: AdminAction[] = [
   "admin_whitelist_add",
   "admin_whitelist_del",
   "admin_whitelist_list",
+  "service_create",
+  "service_update",
+  "service_delete",
+  "service_get",
+  "service_list",
 ];
 
 export async function POST(req: NextRequest) {

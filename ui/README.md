@@ -34,7 +34,7 @@ START_UI_LOCAL=1 ./start-all.sh   # UI 仍用本机 npm run dev（调试用）
 | 变量 | 说明 |
 |------|------|
 | `GATEWAY_ADMIN_URL` | 默认 `http://127.0.0.1:8080/admin/gw/v1` |
-| `GATEWAY_ADMIN_SECRET` | 与 Lua 中 `ADMIN_SECRET` 一致，默认 `admin-secret-2026` |
+| `GATEWAY_ADMIN_SECRET` | 与网关 `GATEWAY_ADMIN_SECRET` 相同。未设置或短于 16 字符时管理请求失败，没有内置默认值 |
 
 ## 功能
 

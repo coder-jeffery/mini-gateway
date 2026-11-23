@@ -12,12 +12,13 @@ from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-DEFAULT_SECRET = b"admin-secret-2026"
 DEFAULT_URL = "http://127.0.0.1:8080/admin/gw/v1"
 
 
 def admin_secret() -> bytes:
-    raw = os.environ.get("GATEWAY_ADMIN_SECRET", "admin-secret-2026")
+    raw = os.environ.get("GATEWAY_ADMIN_SECRET", "")
+    if len(raw) < 16:
+        raise SystemExit("GATEWAY_ADMIN_SECRET is required and must be at least 16 characters")
     return raw.encode("utf-8")
 
 

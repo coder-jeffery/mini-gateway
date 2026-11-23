@@ -3,9 +3,22 @@ local cjson = require "cjson"
 local ngx = ngx
 local hmac = require "resty.hmac"
 local apikey_admin = require "apikey_admin"
+local config = require "gateway_config"
+local service_admin = require "service_admin"
+local store_mod = require "store"
 
-local ADMIN_SECRET = "admin-secret-2026"
 local SIGN_WINDOW = 60 -- signature timestamp tolerance (seconds)
+
+local function const_eq(a, b)
+    if not a or not b or #a ~= #b then
+        return false
+    end
+    local acc = 0
+    for i = 1, #a do
+        acc = bit.bor(acc, bit.bxor(a:byte(i), b:byte(i)))
+    end
+    return acc == 0
+end
 
 local function is_private_ip(ip)
     local a, b = ip:match("^(%d+)%.(%d+)%.")
@@ -40,6 +53,11 @@ local function resp(code, data)
     ngx.header["Content-Type"] = "application/json"
     ngx.say(cjson.encode(data))
     return ngx.exit(code)
+end
+
+local admin_secret, secret_err = config.admin_hmac_secret()
+if not admin_secret then
+    return resp(503, {ok=false, msg=secret_err})
 end
 
 ngx.req.read_body()
@@ -98,7 +116,7 @@ end
 
 -- Server-side sign; match Python hmac.hexdigest() via final(..., true) for hex
 local raw = tostring(ts) .. ":" .. tostring(nonce)
-local h = hmac:new(ADMIN_SECRET, hmac.ALGOS.SHA256)
+local h = hmac:new(admin_secret, hmac.ALGOS.SHA256)
 if not h then
     redis_util.close(red)
     return resp(500, {ok=false, msg="hmac init failed"})
@@ -108,7 +126,7 @@ if not h:update(raw) then
     return resp(500, {ok=false, msg="hmac update failed"})
 end
 local calc_sign = h:final(nil, true)
-if not calc_sign or calc_sign ~= sign then
+if not const_eq(calc_sign, sign) then
     redis_util.close(red)
     return resp(403, {ok=false, msg="invalid signature"})
 end
@@ -235,6 +253,30 @@ elseif action == "hmac_test" then
         ts = ts,
         nonce = nonce,
     })
+
+elseif action == "service_create" or action == "service_update"
+    or action == "service_delete" or action == "service_get" or action == "service_list" then
+    redis_util.close(red)
+    local backend = store_mod.backend()
+    local store_handle, err_open = backend.new()
+    if not store_handle then
+        return resp(500, {ok=false, msg="storage error"})
+    end
+    local code, data
+    if action == "service_create" then
+        code, data = service_admin.create_backend(backend, store_handle, req)
+    elseif action == "service_update" then
+        code, data = service_admin.update_backend(backend, store_handle, req)
+    elseif action == "service_delete" then
+        code, data = service_admin.delete_backend(backend, store_handle, req.id)
+    elseif action == "service_get" then
+        code, data = service_admin.get_backend(backend, store_handle, req.id)
+    else
+        code, data = service_admin.list_backend(backend, store_handle)
+    end
+    service_admin.clear_cache()
+    backend.close(store_handle)
+    return resp(code, data)
 
 else
     redis_util.close(red)

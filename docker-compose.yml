@@ -70,6 +70,7 @@ services:
       GATEWAY_UPSTREAM_HEALTH_PASS_THRESHOLD: ${GATEWAY_UPSTREAM_HEALTH_PASS_THRESHOLD:-2}
       GATEWAY_UPSTREAM_HEALTH_OK_STATUS: ${GATEWAY_UPSTREAM_HEALTH_OK_STATUS:-200-399}
       GATEWAY_UPSTREAM_MAX_TRIES: ${GATEWAY_UPSTREAM_MAX_TRIES:-2}
+      GATEWAY_ADMIN_SECRET: ${GATEWAY_ADMIN_SECRET:-}
     volumes:
       - ./nginx/conf/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
       - ./nginx/lua:/usr/local/openresty/nginx/lua:ro
@@ -91,5 +92,5 @@ services:
       PORT: ${UI_PORT:-3000}
       HOSTNAME: 0.0.0.0
       GATEWAY_ADMIN_URL: ${GATEWAY_ADMIN_URL:-http://openresty:8080/admin/gw/v1}
-      GATEWAY_ADMIN_SECRET: ${GATEWAY_ADMIN_SECRET:-admin-secret-2026}
+      GATEWAY_ADMIN_SECRET: ${GATEWAY_ADMIN_SECRET:-}
     restart: always

@@ -58,7 +58,7 @@ curl -H "X-Api-Key: mini-key" http://127.0.0.1:8080/anything
 # upstream request-target is /get
 ```
 
-不设置该变量时，上游看到的就是客户端路径。httpbin 的 `/get` 示例：
+不设置该变量时，上游看到的就是客户端路径。命中服务路由时也是原样转发，`GATEWAY_UPSTREAM_PATH` 只作用于未命中任何 `path_prefix` 的默认上游。httpbin 的 `/get` 示例：
 
 ```bash
 curl -H "X-Api-Key: mini-key" http://127.0.0.1:8080/get
@@ -149,6 +149,16 @@ GATEWAY_STORAGE=sqlite ./start.sh             # SQLite 落盘 ./data/
 --
 curl -i http://127.0.0.1:8080/                              # 401
 curl -i -H "X-Api-Key: mini-key" http://127.0.0.1:8080/get  # 200，路径原样转发
+
+### 访问日志与管理 HMAC
+
+访问日志不保存 API Key、Bearer 或 JWT 原文。API Key 只留下不可逆指纹 `api_key_fp` / `auth_subject`（`fp_` 加 SHA-256 前 16 位）。OAuth 的 `sub` / `client_id` 仍保留，便于追踪。
+
+`/admin/gw/v1` 的 HMAC 密钥只读 `GATEWAY_ADMIN_SECRET`。没有内置默认值；未设置或短于 16 字符时接口返回 503，正文不含密钥。`/admin/gw` v0 仍使用存储里的 Bearer token，不使用这个变量。
+
+### 服务路由
+
+管理接口 `service_create` / `service_update` / `service_delete` / `service_get` / `service_list`（v0 与 v1）登记 `path_prefix`。匹配规则与 [PR #1](https://github.com/coder-jeffery/mini-gateway/pull/1) 相同：最长前缀，且必须落在路径边界上（`/api/orders` 匹配自身和 `/api/orders/...`，不匹配 `/api/orders-v2`）。未命中时走 `GATEWAY_UPSTREAM_PEERS`。命中时只使用该服务的 `upstream_url`（`http(s)://host[:port]`，不能带路径）以及可选的 `upstream_peers`（`host:port[:weight],...`）。这组 peer 单独做被动健康状态和重试，不与其他服务混用。主动探测仍只针对 `GATEWAY_UPSTREAM_PEERS`。`/admin`、`/health`、`/ready` 不能作为前缀。预检 `OPTIONS` 在鉴权前返回；普通请求仍走 API Key / OAuth 和限流。服务 CORS 覆盖全局 `GATEWAY_CORS_*`。凭证不能和 `*` 源同时开启。
 
 
 apt install nginx-module-http2
