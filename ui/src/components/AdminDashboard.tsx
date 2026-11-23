@@ -3,13 +3,15 @@
 import { useState } from "react";
 import { ApiKeyPanel } from "./ApiKeyPanel";
 import { IpWhitelistPanel } from "./IpWhitelistPanel";
+import { ServiceRoutePanel } from "./ServiceRoutePanel";
 
-type Tab = "apikeys" | "business-ip" | "admin-ip";
+type Tab = "apikeys" | "business-ip" | "admin-ip" | "services";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "apikeys", label: "API Key" },
   { id: "business-ip", label: "业务白名单" },
   { id: "admin-ip", label: "管理白名单" },
+  { id: "services", label: "服务路由" },
 ];
 
 export function AdminDashboard() {
@@ -55,6 +57,7 @@ export function AdminDashboard() {
         {tab === "apikeys" ? <ApiKeyPanel /> : null}
         {tab === "business-ip" ? <IpWhitelistPanel mode="business" /> : null}
         {tab === "admin-ip" ? <IpWhitelistPanel mode="admin" /> : null}
+        {tab === "services" ? <ServiceRoutePanel /> : null}
       </section>
     </div>
   );

@@ -2,6 +2,7 @@ local store_mod = require "store"
 local cjson = require "cjson"
 local ngx = ngx
 local apikey_admin = require "apikey_admin"
+local service_admin = require "service_admin"
 
 local function resp(code, data)
     ngx.status = code
@@ -213,6 +214,24 @@ elseif action == "token_revoke" then
 elseif action == "token_list" then
     backend.close(handle)
     return resp(400, {ok=false, msg="token_list not implemented"})
+
+elseif action == "service_create" or action == "service_update"
+    or action == "service_delete" or action == "service_get" or action == "service_list" then
+    local code, data
+    if action == "service_create" then
+        code, data = service_admin.create_backend(backend, handle, req)
+    elseif action == "service_update" then
+        code, data = service_admin.update_backend(backend, handle, req)
+    elseif action == "service_delete" then
+        code, data = service_admin.delete_backend(backend, handle, req.id)
+    elseif action == "service_get" then
+        code, data = service_admin.get_backend(backend, handle, req.id)
+    else
+        code, data = service_admin.list_backend(backend, handle)
+    end
+    service_admin.clear_cache()
+    backend.close(handle)
+    return resp(code, data)
 
 else
     backend.close(handle)

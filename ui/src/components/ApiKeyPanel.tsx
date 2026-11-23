@@ -57,7 +57,10 @@ export function ApiKeyPanel() {
   }, []);
 
   useEffect(() => {
-    void refreshList(1);
+    const timer = window.setTimeout(() => {
+      void refreshList(1);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [refreshList]);
 
   function closeForm() {

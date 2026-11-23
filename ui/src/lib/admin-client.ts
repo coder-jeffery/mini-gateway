@@ -1,11 +1,14 @@
 import crypto from "crypto";
 import type { AdminAction, AdminResponse } from "./admin-types";
 
-const DEFAULT_SECRET = "admin-secret-2026";
 const DEFAULT_URL = "http://127.0.0.1:8080/admin/gw/v1";
 
 function adminSecret(): string {
-  return process.env.GATEWAY_ADMIN_SECRET ?? DEFAULT_SECRET;
+  const value = process.env.GATEWAY_ADMIN_SECRET;
+  if (!value || value.length < 16) {
+    throw new Error("admin hmac secret is not configured");
+  }
+  return value;
 }
 
 function adminUrl(): string {

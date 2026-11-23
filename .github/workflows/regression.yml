@@ -1,0 +1,74 @@
+name: regression
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: regression-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gateway:
+    runs-on: ubuntu-24.04
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install OpenResty and lsqlite3
+        timeout-minutes: 15
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          printf 'Acquire::http::Timeout "20";\nAcquire::https::Timeout "20";\nAcquire::Retries "5";\n' | sudo tee /etc/apt/apt.conf.d/99-timeout
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ca-certificates gnupg lsb-release build-essential libsqlite3-dev wget unzip curl
+          wget -qO - https://openresty.org/package/pubkey.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openresty.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package/ubuntu $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/openresty.list
+          sudo apt-get update
+          sudo apt-get install -y openresty
+          # LuaRocks' manifest exceeds LuaJIT's 65536-constant limit, so compile
+          # the same lsqlite3 0.9.5 module the image expects directly into lualib.
+          curl -fsSL -o /tmp/lsqlite3.src.rock https://luarocks.org/lsqlite3-0.9.5-1.src.rock
+          rm -rf /tmp/lsqlite3-src && mkdir /tmp/lsqlite3-src
+          unzip -q /tmp/lsqlite3.src.rock -d /tmp/lsqlite3-src
+          unzip -qo /tmp/lsqlite3-src/lsqlite3_fsl09y.zip -d /tmp/lsqlite3-src
+          gcc -O2 -fPIC -D'LSQLITE_VERSION="0.9.5"' \
+            -I/usr/local/openresty/luajit/include/luajit-2.1 \
+            -c /tmp/lsqlite3-src/lsqlite3_fsl09y/lsqlite3.c -o /tmp/lsqlite3.o
+          gcc -shared -o /tmp/lsqlite3.so /tmp/lsqlite3.o -lsqlite3
+          sudo cp /tmp/lsqlite3.so /usr/local/openresty/lualib/lsqlite3.so
+      - name: URI passthrough
+        run: python3 test/test_upstream_uri.py
+      - name: Redaction, HMAC, and service routes
+        env:
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: "6379"
+          REQUIRE_REDIS: "1"
+          REQUIRE_SQLITE: "1"
+        run: python3 test/test_security_and_routes.py
+
+  ui:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install, typecheck, lint, and build
+        working-directory: ui
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run lint
+          npm run build

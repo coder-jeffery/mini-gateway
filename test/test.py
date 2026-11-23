@@ -6,7 +6,9 @@ import uuid
 import json
 import requests
 
-ADMIN_SECRET = b"admin-secret-2026"
+ADMIN_SECRET = os.environ.get("GATEWAY_ADMIN_SECRET", "").encode("utf-8")
+if len(ADMIN_SECRET) < 16:
+    raise SystemExit("GATEWAY_ADMIN_SECRET is required and must be at least 16 characters")
 BASE_URL = os.environ.get("ADMIN_GW_V1_URL", "http://127.0.0.1:8080/admin/gw/v1")
 
 

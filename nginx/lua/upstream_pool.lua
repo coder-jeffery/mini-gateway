@@ -12,8 +12,16 @@ local function rr_key()
     return "upe:rr:counter"
 end
 
-function _M.all_peers()
+local function configured_peers()
+    local override = ngx.ctx.gateway_service_peers
+    if type(override) == "table" and #override > 0 then
+        return override
+    end
     return config.upstream_peers()
+end
+
+function _M.all_peers()
+    return configured_peers()
 end
 
 function _M.healthy_peers(exclude_keys)
@@ -23,7 +31,7 @@ function _M.healthy_peers(exclude_keys)
         seen[k] = true
     end
     local out = {}
-    for _, p in ipairs(config.upstream_peers()) do
+    for _, p in ipairs(configured_peers()) do
         local key = health.peer_key(p.host, p.port)
         if not seen[key] and health.is_available(p.host, p.port) then
             out[#out + 1] = {

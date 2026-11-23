@@ -88,7 +88,10 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
   );
 
   useEffect(() => {
-    void refreshList();
+    const timer = window.setTimeout(() => {
+      void refreshList();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [refreshList]);
 
   function closeForm() {
