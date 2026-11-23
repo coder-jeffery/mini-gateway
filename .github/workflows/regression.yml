@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: regression-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   gateway:
     runs-on: ubuntu-24.04
@@ -20,10 +24,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install OpenResty and lsqlite3
-        timeout-minutes: 8
+        timeout-minutes: 15
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
+          printf 'Acquire::http::Timeout "20";\nAcquire::https::Timeout "20";\nAcquire::Retries "5";\n' | sudo tee /etc/apt/apt.conf.d/99-timeout
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ca-certificates gnupg lsb-release build-essential libsqlite3-dev wget unzip curl
           wget -qO - https://openresty.org/package/pubkey.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openresty.gpg
