@@ -30,7 +30,6 @@ REPO = Path(__file__).resolve().parents[1]
 NGINX_CONF = REPO / "nginx" / "conf" / "nginx.conf"
 LUA_DIR = REPO / "nginx" / "lua"
 OPENRESTY = shutil.which("openresty")
-REDIS_CLI = shutil.which("redis-cli")
 MIME_CANDIDATES = [
     Path("/usr/local/openresty/nginx/conf/mime.types"),
 ]
@@ -188,18 +187,49 @@ def wait_ready(storage: str) -> None:
     raise SystemExit(f"/ready not {storage}: {last}")
 
 
+def _redis_read_line(sock: socket.socket) -> bytes:
+    buf = b""
+    while not buf.endswith(b"\r\n"):
+        chunk = sock.recv(1)
+        if not chunk:
+            break
+        buf += chunk
+    return buf[:-2]
+
+
+def _redis_read(sock: socket.socket):
+    prefix = sock.recv(1)
+    if prefix in (b"+", b":", b"-"):
+        line = _redis_read_line(sock).decode()
+        if prefix == b"-":
+            raise SystemExit(f"redis error: {line}")
+        return line
+    if prefix == b"$":
+        size = int(_redis_read_line(sock))
+        if size < 0:
+            return ""
+        data = b""
+        while len(data) < size + 2:
+            data += sock.recv(size + 2 - len(data))
+        return data[:size].decode()
+    if prefix == b"*":
+        count = int(_redis_read_line(sock))
+        if count < 0:
+            return ""
+        return "\n".join(_redis_read(sock) for _ in range(count))
+    raise SystemExit(f"unexpected redis reply prefix: {prefix!r}")
+
+
 def redis_cmd(*args: str) -> str:
-    if not REDIS_CLI:
-        raise SystemExit("redis-cli is required")
     host = os.environ.get("REDIS_HOST", "127.0.0.1")
-    port = os.environ.get("REDIS_PORT", "6379")
-    proc = subprocess.run(
-        [REDIS_CLI, "-h", host, "-p", port, *args],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return proc.stdout
+    port = int(os.environ.get("REDIS_PORT", "6379"))
+    payload = f"*{len(args)}\r\n".encode()
+    for arg in args:
+        raw = arg.encode()
+        payload += f"${len(raw)}\r\n".encode() + raw + b"\r\n"
+    with socket.create_connection((host, port), timeout=5) as sock:
+        sock.sendall(payload)
+        return str(_redis_read(sock))
 
 
 def fingerprint(secret: str) -> str:
@@ -567,14 +597,12 @@ def main() -> None:
         raise SystemExit("port 8080 is already in use")
     redis_port = os.environ.get("REDIS_PORT", "6379")
     redis_up = port_open(int(redis_port))
-    if redis_up and REDIS_CLI:
+    if redis_up:
         test_hmac_and_logs(redis_port)
     elif os.environ.get("REQUIRE_REDIS") == "1":
-        if not redis_up:
-            raise SystemExit(f"redis is required but port {redis_port} is not reachable")
-        raise SystemExit("redis is required but redis-cli is not installed")
+        raise SystemExit(f"redis is required but port {redis_port} is not reachable")
     else:
-        print("SKIP redis hmac/log tests (redis or redis-cli unavailable)")
+        print("SKIP redis hmac/log tests (redis not reachable)")
     with tempfile.TemporaryDirectory() as tmp:
         test_sqlite_log(Path(tmp) / "gateway.db")
     test_routes()

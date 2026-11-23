@@ -20,9 +20,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install OpenResty and lsqlite3
+        timeout-minutes: 8
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ca-certificates gnupg lsb-release build-essential libsqlite3-dev wget unzip curl redis-tools
+          sudo apt-get install -y --no-install-recommends ca-certificates gnupg lsb-release build-essential libsqlite3-dev wget unzip curl
           wget -qO - https://openresty.org/package/pubkey.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openresty.gpg
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package/ubuntu $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/openresty.list
           sudo apt-get update
