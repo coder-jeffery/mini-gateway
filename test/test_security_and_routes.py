@@ -566,12 +566,15 @@ def main() -> None:
     if port_open(8080):
         raise SystemExit("port 8080 is already in use")
     redis_port = os.environ.get("REDIS_PORT", "6379")
-    if port_open(int(redis_port)) and REDIS_CLI:
+    redis_up = port_open(int(redis_port))
+    if redis_up and REDIS_CLI:
         test_hmac_and_logs(redis_port)
     elif os.environ.get("REQUIRE_REDIS") == "1":
-        raise SystemExit("redis is required but not reachable")
+        if not redis_up:
+            raise SystemExit(f"redis is required but port {redis_port} is not reachable")
+        raise SystemExit("redis is required but redis-cli is not installed")
     else:
-        print("SKIP redis hmac/log tests (redis not reachable)")
+        print("SKIP redis hmac/log tests (redis or redis-cli unavailable)")
     with tempfile.TemporaryDirectory() as tmp:
         test_sqlite_log(Path(tmp) / "gateway.db")
     test_routes()
