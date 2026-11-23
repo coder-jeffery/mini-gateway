@@ -109,3 +109,10 @@ HMAC 管理接口 v1（/admin/gw/v1）：
         GATEWAY_ADMIN_SECRET=admin-secret-2026 ADMIN_GW_V1_URL=http://127.0.0.1:8080/admin/gw/v1 ./test/hmac_call.sh apikey_list '{"page":1,"page_size":10}'
 
     签名规则：sign = HMAC-SHA256(secret, "{ts}:{nonce}").hexdigest()，body 需含 ts、nonce、sign、action。
+
+上游 request-target：
+
+    默认（不设 GATEWAY_UPSTREAM_PATH）原样转发客户端路径和查询串，方法与 body 不变。
+    httpbin 演示请请求网关的 /get，或显式设置 GATEWAY_UPSTREAM_PATH=/get。
+    设置 GATEWAY_UPSTREAM_PATH 后，该值替换上游 request-target，客户端查询串不转发。
+    值不以 / 开头时会自动补上。值里如果带 ?query，则使用这段查询串，而不是客户端的查询串。

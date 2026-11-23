@@ -108,10 +108,21 @@ function _M.upstream_scheme()
     return "https"
 end
 
+-- Upstream request-target override.
+-- nil when GATEWAY_UPSTREAM_PATH is unset or empty: passthrough.
+-- rewrite_by_lua then leaves $gateway_upstream_path empty, so
+-- `proxy_pass $scheme://gateway_backend$gateway_upstream_path` has no URI.
+-- On that form OpenResty forwards the original request-target (path, query,
+-- percent-encoding, repeated parameters) without decoding it again.
+-- A non-empty value is the legacy override: it replaces the request-target.
+-- Do not default this to /get; that pinned every demo request and is now opt-in.
 function _M.upstream_proxy_path()
-    local v = env("GATEWAY_UPSTREAM_PATH", "/get")
-    if v == "" or v:sub(1, 1) ~= "/" then
-        return "/" .. v
+    local v = os.getenv("GATEWAY_UPSTREAM_PATH")
+    if v == nil or v == "" then
+        return nil
+    end
+    if v:sub(1, 1) ~= "/" then
+        v = "/" .. v
     end
     return v
 end

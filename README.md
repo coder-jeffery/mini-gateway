@@ -46,20 +46,38 @@ GATEWAY_STORAGE=sqlite ./start.sh
 
 Default credentials after bootstrap: API key `mini-key`, admin Bearer token `mini-token`.
 
+### Upstream request URI
+
+默认把客户端的路径和查询串原样转到上游（方法、body、百分号编码、重复参数都保留）。`GET /v1/orders?a=1&a=2` 在上游仍是这个 request-target。
+
+`GATEWAY_UPSTREAM_PATH` 未设置或为空时走这条路径。把它设成路径后，该值会替换上游 request-target，客户端查询串不再转发。旧的 httpbin 演示把所有请求固定到 `/get`，需要显式打开：
+
+```bash
+GATEWAY_UPSTREAM_PATH=/get GATEWAY_STORAGE=memory ./start.sh
+curl -H "X-Api-Key: mini-key" http://127.0.0.1:8080/anything
+# upstream request-target is /get
+```
+
+不设置该变量时，上游看到的就是客户端路径。httpbin 的 `/get` 示例：
+
+```bash
+curl -H "X-Api-Key: mini-key" http://127.0.0.1:8080/get
+```
+
 Option 1:
 ```bash
-curl -H "X-Api-Key: mini-key" http://127.0.0.1:8080
+curl -H "X-Api-Key: mini-key" http://127.0.0.1:8080/get
 ```
 
 Option 2:
 ```bash
 docker exec -it gw-redis redis-cli SET apikey:abc123 1
-curl -H "X-Api-Key: abc123" http://127.0.0.1:8080
+curl -H "X-Api-Key: abc123" http://127.0.0.1:8080/get
 ```
 
 Load test:
 ```bash
-wrk -t2 -c20 -d10s -H "X-Api-Key: abc123" http://127.0.0.1:8080
+wrk -t2 -c20 -d10s -H "X-Api-Key: abc123" http://127.0.0.1:8080/get
 ```
 
 Business IP whitelist:
@@ -130,7 +148,7 @@ GATEWAY_STORAGE=sqlite ./start.sh             # SQLite 落盘 ./data/
 
 --
 curl -i http://127.0.0.1:8080/                              # 401
-curl -i -H "X-Api-Key: mini-key" http://127.0.0.1:8080/     # 200
+curl -i -H "X-Api-Key: mini-key" http://127.0.0.1:8080/get  # 200，路径原样转发
 
 
 apt install nginx-module-http2

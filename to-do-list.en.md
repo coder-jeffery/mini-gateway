@@ -25,7 +25,7 @@ Capability matrix (aligned with typical gateway checklists, with phase tags):
 
 | Domain | Capability | Status | Phase |
 |--------|------------|--------|-------|
-| Ingress & routing | Fixed upstream proxy | ✅ httpbin demo | **P0** configurable upstream |
+| Ingress & routing | Single upstream pool + original URI passthrough (`GATEWAY_UPSTREAM_PATH` pins a path) | ✅ | — |
 | | Dynamic routing / canary / mirror | ❌ | P3 |
 | AuthN/Z | API Key | ✅ | — |
 | | OAuth2 JWT (HS256/RS256) | ✅ | — |
@@ -178,7 +178,7 @@ Aligned with the recommended order in `develop-design.md`, plus product gaps.
 
 **P0 MVP (no “product release” tag until all are done)**
 
-- [ ] P0-1 Configurable upstream  
+- [x] P0-1 Configurable upstream (original URI passthrough by default; `GATEWAY_UPSTREAM_PATH` pins a path)  
 - [ ] P0-2 `/health`, `/ready`  
 - [ ] P0-3 admin v1 → store abstraction  
 - [ ] P0-4 UI all storage modes  
