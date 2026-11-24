@@ -3,12 +3,12 @@
 local store_mod = require "store"
 local config = require "gateway_config"
 local oauth = require "oauth_validate"
+local storage_circuit = require "storage_circuit"
 local cjson = require "cjson"
 local ngx = ngx
 
-local CIRCUIT_BREAK_POLICY = "pass"
-local DEFAULT_RATE_LIMIT = 10
-local DEFAULT_RATE_WINDOW = 60
+local DEFAULT_RATE_LIMIT = config.storage_cb_degraded_default_limit()
+local DEFAULT_RATE_WINDOW = config.storage_cb_degraded_default_window()
 
 local function deny(status, msg)
     ngx.status = status
@@ -17,15 +17,18 @@ local function deny(status, msg)
     return ngx.exit(status)
 end
 
+local function storage_fail()
+    storage_circuit.record_failure()
+    return handle_storage_outage()
+end
+
 local function handle_storage_outage()
     ngx.header["X-Gateway-Storage-Degraded"] = "true"
     ngx.header["X-Gateway-Storage"] = store_mod.name()
-    if store_mod.name() ~= "redis" then
-        return deny(503, "storage unavailable")
-    end
+    ngx.header["X-Storage-Circuit-State"] = storage_circuit.current_state()
     ngx.header["X-Redis-Circuit-Break"] = "true"
-    if CIRCUIT_BREAK_POLICY == "reject" then
-        return deny(503, "circuit break: redis unavailable")
+    if config.storage_cb_policy() == "reject" then
+        return deny(503, "circuit break: storage unavailable")
     end
     ngx.header["X-RateLimit-Limit"] = DEFAULT_RATE_LIMIT
     ngx.header["X-RateLimit-Remaining"] = -1
@@ -89,12 +92,16 @@ if not identity then
     return
 end
 
+if not storage_circuit.allow_storage() then
+    return handle_storage_outage()
+end
+
 local ip = ngx.var.remote_addr
 local backend = store_mod.backend()
 local handle, err = backend.new()
 if not handle then
     ngx.log(ngx.ERR, "storage open fail: ", err)
-    return handle_storage_outage()
+    return storage_fail()
 end
 
 ngx.header["X-Gateway-Storage"] = store_mod.name()
@@ -108,9 +115,10 @@ if identity.use_apikey_store then
     if err_exists then
         backend.close(handle)
         ngx.log(ngx.ERR, "storage exists err: ", err_exists)
-        return handle_storage_outage()
+        return storage_fail()
     end
     if key_exist ~= 1 then
+        storage_circuit.record_success()
         backend.close(handle)
         return deny(401, "invalid api key")
     end
@@ -119,7 +127,7 @@ if identity.use_apikey_store then
     if err_meta then
         backend.close(handle)
         ngx.log(ngx.ERR, "storage hmget err: ", err_meta)
-        return handle_storage_outage()
+        return storage_fail()
     end
     rate_limit = tonumber(meta[1]) or DEFAULT_RATE_LIMIT
     rate_window = tonumber(meta[2]) or DEFAULT_RATE_WINDOW
@@ -129,10 +137,11 @@ local in_whitelist, err_wl = backend.sismember(handle, "whitelist:ip", ip)
 if err_wl then
     backend.close(handle)
     ngx.log(ngx.ERR, "storage sismember err: ", err_wl)
-    return handle_storage_outage()
+    return storage_fail()
 end
 
 if in_whitelist == 1 then
+    storage_circuit.record_success()
     backend.close(handle)
     ngx.header["X-RateLimit-Whitelist"] = "true"
     ngx.header["X-RateLimit-Limit"] = rate_limit
@@ -149,7 +158,7 @@ local cnt, err_rl = backend.sliding_window(handle, limit_key, rate_window, now, 
 if err_rl then
     backend.close(handle)
     ngx.log(ngx.ERR, "storage rate limit err: ", err_rl)
-    return handle_storage_outage()
+    return storage_fail()
 end
 
 local remaining = rate_limit - cnt
@@ -160,10 +169,12 @@ ngx.header["X-RateLimit-Remaining"] = math.max(0, remaining)
 ngx.header["X-RateLimit-Reset"] = reset_ts
 
 if cnt >= rate_limit then
+    storage_circuit.record_success()
     backend.close(handle)
     ngx.header["Retry-After"] = reset_ts - math.ceil(ngx.now())
     return deny(429, "too many requests, rate limited")
 end
 
+storage_circuit.record_success()
 backend.close(handle)
 return

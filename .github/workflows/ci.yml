@@ -68,5 +68,6 @@ jobs:
           python3 test/test.py
           python3 test/test_hmac.py
           python3 test/test_oauth2.py
+          python3 test/test_metrics.py
       - if: always()
         run: docker compose down -v || true

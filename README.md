@@ -69,7 +69,9 @@ flowchart LR
 | `/health`、`/ready` | ✅ |
 | Web 管理台（全存储模式） | ✅ |
 | 访问日志 api_key / subject **脱敏** | ✅ |
-| Prometheus `/metrics`、灰度路由 | ❌ P1+ |
+| Prometheus `GET /metrics` | ✅ |
+| 存储 **错误率熔断**（半开）+ `pass`/`reject` 降级 | ✅ env 可配 |
+| 灰度路由、多维度限流 | ❌ P2+ |
 
 契约与示例：[postman/](./postman/) · 运维手册：[operation-doc.md](./operation-doc.md)
 
@@ -115,7 +117,10 @@ Docker 服务：`gw-openresty`（8080）、可选 `gw-redis`（6379）、可选 
 ```bash
 curl -s http://127.0.0.1:8080/health
 curl -s http://127.0.0.1:8080/ready
+curl -s http://127.0.0.1:8080/metrics | head
 ```
+
+存储熔断（`GATEWAY_STORAGE_CB_*`）默认 **10s 窗口、50% 错误率、最少 5 次采样** 后打开；冷却 **30s** 进入半开。降级策略 `GATEWAY_STORAGE_CB_POLICY=pass|reject`（兼容旧名 `GATEWAY_CIRCUIT_BREAK_POLICY`）。响应头 `X-Storage-Circuit-State`：`closed` / `open` / `half_open`。
 
 ### 业务流量（原样转发路径）
 

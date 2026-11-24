@@ -196,6 +196,54 @@ function _M.upstream_timeouts()
 end
 
 -- GATEWAY_UPSTREAM_PEERS: host:port[:weight], comma-separated
+-- pass | reject when storage circuit is open or storage unreachable
+function _M.storage_cb_policy()
+    local v = env("GATEWAY_STORAGE_CB_POLICY", env("GATEWAY_CIRCUIT_BREAK_POLICY", "pass")):lower()
+    if v == "reject" then
+        return "reject"
+    end
+    return "pass"
+end
+
+function _M.storage_cb_window_sec()
+    return tonumber(env("GATEWAY_STORAGE_CB_WINDOW_SEC", "10")) or 10
+end
+
+function _M.storage_cb_error_rate()
+    local r = tonumber(env("GATEWAY_STORAGE_CB_ERROR_RATE", "0.5")) or 0.5
+    if r < 0 then
+        return 0
+    end
+    if r > 1 then
+        return 1
+    end
+    return r
+end
+
+function _M.storage_cb_min_requests()
+    return tonumber(env("GATEWAY_STORAGE_CB_MIN_REQUESTS", "5")) or 5
+end
+
+function _M.storage_cb_open_sec()
+    return tonumber(env("GATEWAY_STORAGE_CB_OPEN_SEC", "30")) or 30
+end
+
+function _M.storage_cb_half_open_max()
+    return tonumber(env("GATEWAY_STORAGE_CB_HALF_OPEN_MAX", "3")) or 3
+end
+
+function _M.storage_cb_half_open_success()
+    return tonumber(env("GATEWAY_STORAGE_CB_HALF_OPEN_SUCCESS", "2")) or 2
+end
+
+function _M.storage_cb_degraded_default_limit()
+    return tonumber(env("GATEWAY_STORAGE_CB_DEGRADED_LIMIT", "10")) or 10
+end
+
+function _M.storage_cb_degraded_default_window()
+    return tonumber(env("GATEWAY_STORAGE_CB_DEGRADED_WINDOW", "60")) or 60
+end
+
 function _M.upstream_peers()
     local raw = env("GATEWAY_UPSTREAM_PEERS", "httpbin.org:443")
     local peers = {}
