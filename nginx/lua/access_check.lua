@@ -8,6 +8,7 @@ local config_cache = require "config_cache"
 local policy = require "data_plane_policy"
 local metrics = require "gateway_metrics"
 local cjson = require "cjson"
+local glog = require "gateway_log"
 local ngx = ngx
 
 local DEFAULT_RATE_LIMIT = config.storage_cb_degraded_default_limit()
@@ -103,7 +104,7 @@ local ip = ngx.var.remote_addr
 local backend = store_mod.backend()
 local handle, err = backend.new()
 if not handle then
-    ngx.log(ngx.ERR, "storage open fail: ", err)
+    glog.err("storage open fail: ", err)
     return storage_fail()
 end
 
@@ -124,7 +125,7 @@ if identity.use_apikey_store then
     local key_exist, err_exists = config_cache.apikey_exists(api_key, backend, handle)
     if err_exists then
         backend.close(handle)
-        ngx.log(ngx.ERR, "storage exists err: ", err_exists)
+        glog.err("storage exists err: ", err_exists)
         return storage_fail()
     end
     if key_exist ~= 1 then
@@ -136,7 +137,7 @@ if identity.use_apikey_store then
     local meta, err_meta = config_cache.apikey_meta(api_key, backend, handle)
     if err_meta then
         backend.close(handle)
-        ngx.log(ngx.ERR, "storage hmget err: ", err_meta)
+        glog.err("storage hmget err: ", err_meta)
         return storage_fail()
     end
     rate_limit = tonumber(meta[1]) or DEFAULT_RATE_LIMIT
@@ -149,7 +150,7 @@ local identity_key = identity.api_key or ngx.ctx.auth_subject or "anon"
 local rq, rq_err = policy.route_quota(backend, handle, ngx.var.uri or "/", tostring(identity_key))
 if rq_err then
     backend.close(handle)
-    ngx.log(ngx.ERR, "route quota err: ", rq_err)
+    glog.err("route quota err: ", rq_err)
     return storage_fail()
 elseif rq then
     rate_limit = rq.limit
@@ -160,7 +161,7 @@ end
 local in_whitelist, err_wl = config_cache.whitelist_member(ip, backend, handle)
 if err_wl then
     backend.close(handle)
-    ngx.log(ngx.ERR, "storage sismember err: ", err_wl)
+    glog.err("storage sismember err: ", err_wl)
     return storage_fail()
 end
 
@@ -193,7 +194,7 @@ if gcap then
     local ok, reset_ts = sliding_check(backend, gcap.rate_key, gcap.limit, gcap.window)
     if ok == nil then
         backend.close(handle)
-        ngx.log(ngx.ERR, "global rate limit err")
+        glog.err("global rate limit err")
         return storage_fail()
     end
     if not ok then
@@ -212,7 +213,7 @@ local unique_id = now .. ":" .. ngx.var.pid .. ":" .. math.random()
 local cnt, err_rl = backend.sliding_window(handle, limit_key, rate_window, now, unique_id)
 if err_rl then
     backend.close(handle)
-    ngx.log(ngx.ERR, "storage rate limit err: ", err_rl)
+    glog.err("storage rate limit err: ", err_rl)
     return storage_fail()
 end
 

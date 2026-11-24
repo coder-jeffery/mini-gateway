@@ -34,19 +34,23 @@ jobs:
       - run: npm run build
 
   gateway:
-    name: Gateway smoke tests
+    name: Gateway smoke (${{ matrix.storage }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        storage: [memory, sqlite, redis]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install requests
-      - name: Gateway smoke (lite — skip data-plane preflight)
+      - run: chmod +x scripts/ci-smoke-storage.sh scripts/ci-smoke-matrix.sh
+      - name: Gateway smoke (lite, storage matrix)
         env:
-          GATEWAY_STORAGE: memory
           GATEWAY_AUTH_MODE: both
           OAUTH2_JWT_SECRET: oauth2-dev-secret
-        run: ./scripts/ci-smoke-lite.sh
+        run: ./scripts/ci-smoke-storage.sh ${{ matrix.storage }}
       - if: always()
         run: ./scripts/ci-stack-down.sh

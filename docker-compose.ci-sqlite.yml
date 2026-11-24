@@ -1,0 +1,6 @@
+# CI overlay: storage=sqlite (WAL file under ./data).
+services:
+  openresty:
+    environment:
+      GATEWAY_STORAGE: sqlite
+      GATEWAY_SQLITE_PATH: /var/lib/gateway/gateway.db

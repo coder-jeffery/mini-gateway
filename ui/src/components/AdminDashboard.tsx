@@ -3,14 +3,16 @@
 import { useEffect, useState } from "react";
 import { ApiKeyPanel } from "./ApiKeyPanel";
 import { IpWhitelistPanel } from "./IpWhitelistPanel";
+import { GovernancePanel } from "./GovernancePanel";
 import type { GatewayStorageBackend } from "@/lib/admin-types";
 
-type Tab = "apikeys" | "business-ip" | "admin-ip";
+type Tab = "apikeys" | "business-ip" | "admin-ip" | "governance";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "apikeys", label: "API Key" },
   { id: "business-ip", label: "业务白名单" },
   { id: "admin-ip", label: "管理白名单" },
+  { id: "governance", label: "审计与策略" },
 ];
 
 const STORAGE_LABEL: Record<GatewayStorageBackend, string> = {
@@ -111,6 +113,7 @@ export function AdminDashboard() {
         {tab === "apikeys" ? <ApiKeyPanel /> : null}
         {tab === "business-ip" ? <IpWhitelistPanel mode="business" /> : null}
         {tab === "admin-ip" ? <IpWhitelistPanel mode="admin" /> : null}
+        {tab === "governance" ? <GovernancePanel /> : null}
       </section>
     </div>
   );

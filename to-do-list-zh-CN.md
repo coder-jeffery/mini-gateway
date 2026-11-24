@@ -15,10 +15,10 @@
 | **数据面** | 转发、鉴权、限流、熔断执行 | `nginx/lua/access_check.lua`、`oauth_validate.lua`、`nginx.conf` |
 | **控制面** | 配置 CRUD、下发、存储后端 | `admin_api.lua`、`admin_api_v1.lua`、`store/*` |
 | **管理面** | 人用的控制台 | `ui/`（Next.js → HMAC 调 `/admin/gw/v1`） |
-| **观测面** | 指标、日志、告警 | `log_access.lua` + `log_redact.lua`（访问日志脱敏）；**缺口**：`/metrics`、Grafana/告警、错误日志脱敏 |
-| **策略/安全面** | 集中策略（WAF、OPA 等） | 当前：**IP 白名单 + Admin 白名单 + OAuth scope**；远期 OPA/路径黑名单 |
+| **观测面** | 指标、日志、告警 | `/metrics`、访问脱敏、`gateway_log` 错误行脱敏；**缺口**：Grafana/告警 |
+| **策略/安全面** | 集中策略（WAF、OPA 等） | URI/UA 封禁、路由配额、业务 HMAC；**缺口**：OPA/WAF |
 | **扩展面** | 插件 / Wasm / 外部鉴权 | **未做**；MVP 不纳入 |
-| **开发者面** | 门户、文档、Key 申请 | **未做**；P3 可选 |
+| **开发者面** | 门户、文档、Key 申请 | `docs/developer-portal.md`；**缺口**：自助工单/门户 UI |
 | **AI 面** | 模型路由、token 计量 | **未做**；P4 可选 |
 
 能力域对照（与市面网关能力清单对齐，标明阶段）：
@@ -26,21 +26,21 @@
 | 能力域 | 子能力 | 现状 | 计划阶段 |
 |--------|--------|------|----------|
 | 流量接入与路由 | 单上游池 + 原始 URI 透传（`GATEWAY_UPSTREAM_PATH` 可固定路径） | ✅ | — |
-| | 动态路由 / 灰度 / 镜像 | ❌ | P3 |
+| | 动态路由 / 灰度 / 镜像 | 灰度标头 ✅；多 upstream ❌ | P3+ |
 | 认证鉴权 | API Key | ✅ | — |
 | | OAuth2 JWT（HS256/RS256） | ✅ | — |
 | | Admin Bearer + HMAC（v0/v1 **统一 store**） | ✅ | — |
 | | 上游多 peer 主动/被动健康检查 + 加权 LB | ✅ | — |
 | 安全防护 | 业务 IP 白名单、Admin IP 白名单 | ✅ | — |
 | | 访问日志凭证脱敏（api_key / auth_subject） | ✅ | `log_redact.lua` |
-| | 路径/UA 拦截、错误日志脱敏 | ❌ | P2 |
+| | 路径/UA 拦截、错误日志脱敏 | ✅ P2 + `gateway_log` | — |
 | 流量控制 | 滑动窗口、按 Key 配额 | ✅ | — |
-| | 多维度 / 接口级 / 全局限流 | ❌ | P2 |
+| | 多维度 / 接口级 / 全局限流 | ✅ | — |
 | | 错误率熔断（窗口 + 半开） | ✅ | `storage_circuit.lua` |
-| | 漏桶排队 | ❌ | P3 |
+| | 漏桶排队 | 简化水位拒绝 ✅；排队 ❌ | P4 |
 | 可观测性 | 异步访问日志、Request ID | ✅ | — |
 | | Prometheus `/metrics` | ✅ | `GET /metrics` |
-| | 日志采样、管理操作审计分类 | ❌ | P2 |
+| | 日志采样、管理操作审计 | ✅ `audit_list` + UI | — |
 | 管理 / 存储 | memory / redis / sqlite | ✅ | UI + v1 HMAC 全模式 |
 | | v0 `token_list`（列表项脱敏 token） | ✅ | 仅 v0 Bearer，未挂 v1/UI |
 | | GitHub Actions CI（UI build + 网关冒烟） | ✅ | `.github/workflows/ci.yml` |
@@ -79,9 +79,9 @@
 | M1 | 上游地址、超时、Host 头可配置（无改代码发版） | 环境变量或 admin 配置 + `curl` 通真实后端 |
 | M2 | `GET /health`（进程级）、`GET /ready`（存储可达） | K8s/Compose healthcheck 通过 |
 | M3 | 管理路径一致：**UI 与自动化脚本**在选定存储模式下均可 CRUD | `test_hmac.py` + UI 手测；sqlite 模式同类用例 |
-| M4 | 访问日志与错误日志**须脱敏** api_key / Bearer | 访问日志 ✅；**nginx error_log / Bearer 原文** ⚠️ 未统一脱敏 |
+| M4 | 访问日志与错误日志**须脱敏** api_key / Bearer | 访问日志 ✅；错误行 `log_redact.scrub_line` + `gateway_log` ✅（逐步覆盖各模块） |
 | M5 | 根目录 README：架构图、能力表、存储模式选型、运维入口 | 新同学 30 分钟内按文档起全栈 |
-| M6 | CI：至少跑 `test/test.py`、`test_hmac.py`、`test_oauth2.py`（可选门禁） | ✅ workflow；**sqlite/redis 模式未进 CI** 
+| M6 | CI：至少跑 `test/test.py`、`test_hmac.py`、`test_oauth2.py`（可选门禁） | ✅ workflow + **memory/sqlite/redis 矩阵**（`ci-smoke-storage.sh`） |
 
 ### 3.2 P0 任务清单
 

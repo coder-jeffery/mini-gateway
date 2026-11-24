@@ -296,6 +296,22 @@ elseif action == "route_quota_del" then
     backend.del(handle, "policy:route_quota:" .. prefix)
     return finish_mutate(handle, 200, { ok = true, msg = "route quota deleted" }, action, req)
 
+elseif action == "uri_block_list" then
+    local items, err = backend.smembers(handle, "policy:uri_block")
+    backend.close(handle)
+    if err then
+        return resp(500, { ok = false, msg = "storage error" })
+    end
+    return resp(200, { ok = true, uri_blocks = items or {} })
+
+elseif action == "ua_block_list" then
+    local items, err = backend.smembers(handle, "policy:ua_block")
+    backend.close(handle)
+    if err then
+        return resp(500, { ok = false, msg = "storage error" })
+    end
+    return resp(200, { ok = true, ua_blocks = items or {} })
+
 elseif action == "uri_block_add" then
     local prefix = req.prefix
     if not prefix then
