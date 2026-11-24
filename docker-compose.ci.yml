@@ -17,6 +17,16 @@ services:
     depends_on:
       mock-upstream:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:8080/health 2>/dev/null | grep -q healthy",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
     environment:
       GATEWAY_AUTH_MODE: both
       OAUTH2_JWT_SECRET: oauth2-dev-secret
