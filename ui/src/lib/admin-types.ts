@@ -8,7 +8,14 @@ export type AdminAction =
   | "whitelist_list"
   | "admin_whitelist_add"
   | "admin_whitelist_del"
-  | "admin_whitelist_list";
+  | "admin_whitelist_list"
+  | "audit_list"
+  | "admin_role_get"
+  | "admin_role_set"
+  | "uri_block_add"
+  | "uri_block_del"
+  | "uri_block_list"
+  | "route_quota_set";
 
 export type ApiKeyRecord = {
   api_key: string;

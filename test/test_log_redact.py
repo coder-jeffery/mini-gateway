@@ -30,13 +30,33 @@ def test_mask_medium() -> None:
 
 def test_mask_long() -> None:
     assert mask_credential("mini-key") == "mi***"
-    assert mask_credential("super-secret-api-key-xyz") == "supe***-xyz"  # len > 8
+    assert mask_credential("super-secret-api-key-xyz") == "supe***-xyz"
+
+
+def scrub_line(message: str) -> str:
+    """Mirror log_redact.lua scrub_line (no per-request api key injection)."""
+    import re
+
+    s = message
+    s = re.sub(r"(?i)Bearer\s+[A-Za-z0-9_\-\.]+", "Bearer ***", s)
+    s = re.sub(r"(?i)Authorization:\s*\S+", "Authorization: ***", s)
+    s = re.sub(r"X-Api-Key:\s*\S+", "X-Api-Key: ***", s)
+    s = re.sub(r"X-Business-Sign:\s*\S+", "X-Business-Sign: ***", s)
+    return s
+
+
+def test_scrub_bearer() -> None:
+    raw = "jwt validate failed Bearer eyJhbGciOiJIUzI1NiJ9.abc.def"
+    out = scrub_line(raw)
+    assert "eyJ" not in out
+    assert "Bearer ***" in out
 
 
 def main() -> None:
     test_mask_short()
     test_mask_medium()
     test_mask_long()
+    test_scrub_bearer()
     print("all log_redact tests passed")
 
 

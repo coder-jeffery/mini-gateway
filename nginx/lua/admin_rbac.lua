@@ -75,7 +75,9 @@ function _M.allows(role, action)
     end
     if action == "hmac_test" or action == "apikey_list" or action == "get_apikey"
         or action == "whitelist_list" or action == "admin_whitelist_list"
-        or action == "audit_list" or action == "token_list" then
+        or action == "audit_list" or action == "token_list"
+        or action == "uri_block_list" or action == "ua_block_list"
+        or action == "admin_role_get" then
         return true
     end
     return perms[action] == true
