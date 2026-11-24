@@ -269,6 +269,34 @@ function _M.global_qps_window()
     return tonumber(env("GATEWAY_GLOBAL_QPS_WINDOW", "1")) or 1
 end
 
+function _M.business_hmac_mode()
+    local v = env("GATEWAY_BUSINESS_HMAC_MODE", "off"):lower()
+    if v == "required" or v == "optional" then
+        return v
+    end
+    return "off"
+end
+
+function _M.business_hmac_secret()
+    return env("GATEWAY_BUSINESS_HMAC_SECRET", "")
+end
+
+function _M.rate_warmup_enabled()
+    return env("GATEWAY_RATE_WARMUP", "1") == "1"
+end
+
+function _M.leaky_bucket_rate()
+    return tonumber(env("GATEWAY_LEAKY_BUCKET_RATE", "0")) or 0
+end
+
+function _M.leaky_bucket_capacity()
+    return tonumber(env("GATEWAY_LEAKY_BUCKET_CAPACITY", "0")) or 0
+end
+
+function _M.leaky_bucket_ttl_sec()
+    return tonumber(env("GATEWAY_LEAKY_BUCKET_TTL_SEC", "120")) or 120
+end
+
 function _M.admin_v1_default_role()
     local v = env("GATEWAY_ADMIN_V1_ROLE", "full_admin"):lower()
     if v == "operator" or v == "read_only" then

@@ -219,7 +219,14 @@
 - [x] P3-4 配置快照（`config_snapshot_*`）  
 - [x] P3-5 开发者面（`docs/developer-portal.md` + Postman 引用）  
 
-（P4 见 §4，按需迭代。）
+**P4 扩展（部分，`feature/p4-extensions`）**
+
+- [x] P4-1 漏桶（`leaky_bucket.lua` + shared dict）  
+- [x] P4-2 业务 HMAC（`business_hmac.lua`）  
+- [x] P4-3 配额预热（`rate_warmup.lua`）  
+- [ ] P4-4 WebSocket  
+- [ ] P4-5 带宽限流  
+- [ ] P4-6 AI 面  
 
 ---
 

@@ -218,7 +218,14 @@ Aligned with the recommended order in `develop-design.md`, plus product gaps.
 - [x] P3-4 Config snapshot  
 - [x] P3-5 Developer surface (`docs/developer-portal.md`)  
 
-(P4: see §4.)
+**P4 extensions (partial)**
+
+- [x] P4-1 Leaky bucket  
+- [x] P4-2 Business HMAC  
+- [x] P4-3 Rate warmup  
+- [ ] P4-4 WebSocket  
+- [ ] P4-5 Bandwidth limits  
+- [ ] P4-6 AI surface  
 
 ---
 
