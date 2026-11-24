@@ -37,6 +37,9 @@ local function open_db()
         CREATE TABLE IF NOT EXISTS access_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT, v TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS admin_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, v TEXT NOT NULL
+        );
     ]])
     db_cache = db
     return db, nil
@@ -224,6 +227,34 @@ function _M.access_log_append(store, line)
     stmt:step()
     stmt:finalize()
     return true, nil
+end
+
+function _M.admin_audit_append(store, line)
+    local stmt = db(store):prepare("INSERT INTO admin_audit(v) VALUES(?)")
+    stmt:bind_values(line)
+    stmt:step()
+    stmt:finalize()
+    return true, nil
+end
+
+function _M.admin_audit_list(store, limit)
+    limit = tonumber(limit) or 50
+    if limit < 1 then
+        limit = 1
+    end
+    if limit > 200 then
+        limit = 200
+    end
+    local stmt = db(store):prepare(
+        "SELECT v FROM admin_audit ORDER BY id DESC LIMIT ?"
+    )
+    stmt:bind_values(limit)
+    local out = {}
+    while stmt:step() == lsqlite3.ROW do
+        out[#out + 1] = stmt:get_value(0)
+    end
+    stmt:finalize()
+    return out, nil
 end
 
 function _M.list_kv_prefix(store, prefix)

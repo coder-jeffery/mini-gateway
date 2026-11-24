@@ -4,6 +4,9 @@ local cjson = require "cjson"
 local ngx = ngx
 local hmac = require "resty.hmac"
 local apikey_admin = require "apikey_admin"
+local admin_audit = require "admin_audit"
+local config_cache = require "config_cache"
+local config_snapshot = require "config_snapshot"
 
 local SIGN_WINDOW = 60 -- signature timestamp tolerance (seconds)
 
@@ -55,6 +58,14 @@ end
 
 local client_ip = ngx.var.remote_addr
 local backend = store_mod.backend()
+
+local function finish_mutate(handle, code, data, action, req)
+    admin_audit.emit("hmac", client_ip, action, req)
+    config_cache.invalidate_for_action(action, req)
+    backend.close(handle)
+    return resp(code, data)
+end
+
 local handle, err = backend.new()
 if not handle then
     ngx.log(ngx.ERR, "storage connect err: ", err)
@@ -137,8 +148,7 @@ if action == "upsert_apikey" then
     backend.set(handle, "apikey:" .. api_key, "1")
     backend.hset(handle, "apikey:meta:" .. api_key, "limit", limit, "window", window)
     apikey_admin.index_add_backend(backend, handle, api_key)
-    backend.close(handle)
-    return resp(200, { ok = true, msg = "apikey saved" })
+    return finish_mutate(handle, 200, { ok = true, msg = "apikey saved" }, action, req)
 
 elseif action == "del_apikey" then
     local api_key = req.api_key
@@ -149,8 +159,7 @@ elseif action == "del_apikey" then
     backend.del(handle, "apikey:" .. api_key)
     backend.del(handle, "apikey:meta:" .. api_key)
     apikey_admin.index_del_backend(backend, handle, api_key)
-    backend.close(handle)
-    return resp(200, { ok = true, msg = "apikey deleted" })
+    return finish_mutate(handle, 200, { ok = true, msg = "apikey deleted" }, action, req)
 
 elseif action == "apikey_list" then
     local result, list_err = apikey_admin.list_backend(backend, handle, req.page, req.page_size)
@@ -189,8 +198,7 @@ elseif action == "whitelist_add" then
         return resp(400, { ok = false, msg = "need ip" })
     end
     backend.sadd(handle, "whitelist:ip", ip)
-    backend.close(handle)
-    return resp(200, { ok = true, msg = "ip added to business whitelist" })
+    return finish_mutate(handle, 200, { ok = true, msg = "ip added to business whitelist" }, action, req)
 
 elseif action == "whitelist_del" then
     local ip = req.ip
@@ -199,8 +207,7 @@ elseif action == "whitelist_del" then
         return resp(400, { ok = false, msg = "need ip" })
     end
     backend.srem(handle, "whitelist:ip", ip)
-    backend.close(handle)
-    return resp(200, { ok = true, msg = "ip removed from business whitelist" })
+    return finish_mutate(handle, 200, { ok = true, msg = "ip removed from business whitelist" }, action, req)
 
 elseif action == "whitelist_list" then
     local ips, list_err = backend.smembers(handle, "whitelist:ip")
@@ -217,8 +224,7 @@ elseif action == "admin_whitelist_add" then
         return resp(400, { ok = false, msg = "need ip" })
     end
     backend.sadd(handle, "admin:whitelist:ip", ip)
-    backend.close(handle)
-    return resp(200, { ok = true, msg = "ip added to admin whitelist" })
+    return finish_mutate(handle, 200, { ok = true, msg = "ip added to admin whitelist" }, action, req)
 
 elseif action == "admin_whitelist_del" then
     local ip = req.ip
@@ -227,8 +233,7 @@ elseif action == "admin_whitelist_del" then
         return resp(400, { ok = false, msg = "need ip" })
     end
     backend.srem(handle, "admin:whitelist:ip", ip)
-    backend.close(handle)
-    return resp(200, { ok = true, msg = "ip removed from admin whitelist" })
+    return finish_mutate(handle, 200, { ok = true, msg = "ip removed from admin whitelist" }, action, req)
 
 elseif action == "admin_whitelist_list" then
     local ips, list_err = backend.smembers(handle, "admin:whitelist:ip")
@@ -237,6 +242,126 @@ elseif action == "admin_whitelist_list" then
         return resp(500, { ok = false, msg = "storage error" })
     end
     return resp(200, { ok = true, admin_whitelist = ips })
+
+elseif action == "audit_list" then
+    if not backend.admin_audit_list then
+        backend.close(handle)
+        return resp(501, { ok = false, msg = "audit_list unsupported for storage backend" })
+    end
+    local limit = tonumber(req.limit) or 50
+    local lines, list_err = backend.admin_audit_list(handle, limit)
+    backend.close(handle)
+    if not lines then
+        return resp(500, { ok = false, msg = "storage error: " .. tostring(list_err) })
+    end
+    local events = {}
+    for _, line in ipairs(lines) do
+        local ok_dec, obj = pcall(cjson.decode, line)
+        if ok_dec and type(obj) == "table" then
+            events[#events + 1] = obj
+        end
+    end
+    return resp(200, { ok = true, events = events, count = #events })
+
+elseif action == "route_quota_set" then
+    local prefix = req.prefix
+    local limit = tonumber(req.limit)
+    local window = tonumber(req.window)
+    if not prefix or not limit or not window then
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need prefix, limit, window" })
+    end
+    backend.sadd(handle, "policy:route_quota:index", prefix)
+    backend.set(handle, "policy:route_quota:" .. prefix, cjson.encode({ limit = limit, window = window }))
+    return finish_mutate(handle, 200, { ok = true, msg = "route quota saved" }, action, req)
+
+elseif action == "route_quota_del" then
+    local prefix = req.prefix
+    if not prefix then
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need prefix" })
+    end
+    backend.srem(handle, "policy:route_quota:index", prefix)
+    backend.del(handle, "policy:route_quota:" .. prefix)
+    return finish_mutate(handle, 200, { ok = true, msg = "route quota deleted" }, action, req)
+
+elseif action == "uri_block_add" then
+    local prefix = req.prefix
+    if not prefix then
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need prefix" })
+    end
+    backend.sadd(handle, "policy:uri_block", prefix)
+    return finish_mutate(handle, 200, { ok = true, msg = "uri block added" }, action, req)
+
+elseif action == "uri_block_del" then
+    local prefix = req.prefix
+    if not prefix then
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need prefix" })
+    end
+    backend.srem(handle, "policy:uri_block", prefix)
+    return finish_mutate(handle, 200, { ok = true, msg = "uri block removed" }, action, req)
+
+elseif action == "ua_block_add" then
+    local pattern = req.pattern
+    if not pattern then
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need pattern" })
+    end
+    backend.sadd(handle, "policy:ua_block", pattern)
+    return finish_mutate(handle, 200, { ok = true, msg = "ua block added" }, action, req)
+
+elseif action == "ua_block_del" then
+    local pattern = req.pattern
+    if not pattern then
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need pattern" })
+    end
+    backend.srem(handle, "policy:ua_block", pattern)
+    return finish_mutate(handle, 200, { ok = true, msg = "ua block removed" }, action, req)
+
+elseif action == "gray_rule_set" then
+    local name = req.name
+    if not name then
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need name" })
+    end
+    local rule = {
+        percent = tonumber(req.percent) or 0,
+        tag = req.tag or "gray",
+        match_api_key = req.match_api_key,
+        match_ip = req.match_ip,
+    }
+    backend.sadd(handle, "policy:gray_rule:index", name)
+    backend.set(handle, "policy:gray_rule:" .. name, cjson.encode(rule))
+    return finish_mutate(handle, 200, { ok = true, msg = "gray rule saved" }, action, req)
+
+elseif action == "gray_rule_del" then
+    local name = req.name
+    if not name then
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need name" })
+    end
+    backend.srem(handle, "policy:gray_rule:index", name)
+    backend.del(handle, "policy:gray_rule:" .. name)
+    return finish_mutate(handle, 200, { ok = true, msg = "gray rule deleted" }, action, req)
+
+elseif action == "config_snapshot_save" then
+    local meta, snap_err = config_snapshot.save(backend, handle)
+    if not meta then
+        backend.close(handle)
+        return resp(500, { ok = false, msg = tostring(snap_err) })
+    end
+    return finish_mutate(handle, 200, { ok = true, snapshot = meta }, action, req)
+
+elseif action == "config_snapshot_restore" then
+    local meta, rest_err = config_snapshot.restore(backend, handle)
+    if not meta then
+        backend.close(handle)
+        return resp(400, { ok = false, msg = tostring(rest_err) })
+    end
+    return finish_mutate(handle, 200, { ok = true, restored = meta }, action, req)
 
 elseif action == "hmac_test" then
     backend.close(handle)

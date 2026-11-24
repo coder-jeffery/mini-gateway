@@ -85,6 +85,33 @@ function _M.access_log_append(store, line)
     return store._red:rpush("gateway:access_log", line)
 end
 
+function _M.admin_audit_append(store, line)
+    return store._red:rpush("gateway:admin_audit", line)
+end
+
+function _M.admin_audit_list(store, limit)
+    local red = store._red
+    limit = tonumber(limit) or 50
+    if limit < 1 then
+        limit = 1
+    end
+    if limit > 200 then
+        limit = 200
+    end
+    local len, err = red:llen("gateway:admin_audit")
+    if not len then
+        return nil, err
+    end
+    if len == 0 then
+        return {}, nil
+    end
+    local start = len - limit
+    if start < 0 then
+        start = 0
+    end
+    return red:lrange("gateway:admin_audit", start, len - 1)
+end
+
 function _M.list_kv_prefix(store, prefix)
     local red = store._red
     local ids = {}

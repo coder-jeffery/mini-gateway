@@ -16,5 +16,10 @@ python3 test/test.py
 python3 test/test_hmac.py
 python3 test/test_oauth2.py
 python3 test/test_metrics.py
+python3 test/test_log_sample.py
+python3 test/test_admin_audit.py
+python3 test/test_config_cache.py
+python3 test/test_policy_p2.py
+python3 test/test_gray_snapshot.py
 
 echo "ci-smoke-lite: passed (data-plane preflight and bearer_ok skipped)"

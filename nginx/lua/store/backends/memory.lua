@@ -172,6 +172,41 @@ function _M.access_log_append(_store, line)
     return true, nil
 end
 
+function _M.admin_audit_append(_store, line)
+    local ld = log_dict()
+    if not ld then
+        return false, "shared dict gateway_logs missing"
+    end
+    local idx = (ld:get("_audit_idx") or 0) + 1
+    ld:set("_audit_idx", idx)
+    ld:set("audit:" .. idx, line, 86400)
+    return true, nil
+end
+
+function _M.admin_audit_list(_store, limit)
+    local ld = log_dict()
+    if not ld then
+        return nil, "shared dict gateway_logs missing"
+    end
+    limit = tonumber(limit) or 50
+    if limit < 1 then
+        limit = 1
+    end
+    if limit > 200 then
+        limit = 200
+    end
+    local max_idx = ld:get("_audit_idx") or 0
+    local out = {}
+    local from = math.max(1, max_idx - limit + 1)
+    for i = max_idx, from, -1 do
+        local line = ld:get("audit:" .. i)
+        if line then
+            out[#out + 1] = line
+        end
+    end
+    return out, nil
+end
+
 function _M.list_kv_prefix(_store, prefix)
     local d = dict()
     local storage_prefix = "k:" .. prefix

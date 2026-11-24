@@ -1,4 +1,5 @@
 local store_mod = require "store"
+local config = require "gateway_config"
 local upstream_passive = require "upstream_passive"
 local redact = require "log_redact"
 local metrics = require "gateway_metrics"
@@ -26,6 +27,14 @@ local function log_timer(premature, log_data)
     backend.close(handle)
     if not ok then
         ngx.log(ngx.ERR, "access log append err: ", err)
+    end
+end
+
+local status = tonumber(ngx.status) or 0
+local sample = config.access_log_sample_rate()
+if status < 400 and sample < 1 then
+    if math.random() > sample then
+        return
     end
 end
 

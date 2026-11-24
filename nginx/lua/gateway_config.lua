@@ -244,6 +244,42 @@ function _M.storage_cb_degraded_default_window()
     return tonumber(env("GATEWAY_STORAGE_CB_DEGRADED_WINDOW", "60")) or 60
 end
 
+function _M.config_cache_enabled()
+    return env("GATEWAY_CONFIG_CACHE", "1") == "1"
+end
+
+function _M.config_cache_ttl_sec()
+    return tonumber(env("GATEWAY_CONFIG_CACHE_TTL_SEC", "30")) or 30
+end
+
+-- api_key | ip | api_key_ip
+function _M.rate_limit_dimension()
+    local v = env("GATEWAY_RL_DIMENSION", "api_key"):lower()
+    if v == "ip" or v == "api_key_ip" then
+        return v
+    end
+    return "api_key"
+end
+
+function _M.global_qps_limit()
+    return tonumber(env("GATEWAY_GLOBAL_QPS_LIMIT", "0")) or 0
+end
+
+function _M.global_qps_window()
+    return tonumber(env("GATEWAY_GLOBAL_QPS_WINDOW", "1")) or 1
+end
+
+function _M.access_log_sample_rate()
+    local r = tonumber(env("GATEWAY_ACCESS_LOG_SAMPLE_RATE", "1")) or 1
+    if r < 0 then
+        return 0
+    end
+    if r > 1 then
+        return 1
+    end
+    return r
+end
+
 function _M.upstream_peers()
     local raw = env("GATEWAY_UPSTREAM_PEERS", "httpbin.org:443")
     local peers = {}

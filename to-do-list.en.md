@@ -199,10 +199,26 @@ Aligned with the recommended order in `develop-design.md`, plus product gaps.
 - [x] P1-1 Error-rate circuit breaker  
 - [x] P1-2 `/metrics`  
 - [x] P1-3 Breaker policy configuration  
-- [ ] P1-4 Admin audit log  
-- [ ] P1-5 Config local cache  
+- [x] P1-4 Admin audit log (`admin_audit.lua` + `audit_list`)  
+- [x] P1-5 Config local cache (`config_cache.lua` + shared dict)  
 
-(P2–P4 items: see §4; pull from backlog per iteration.)
+**P2 policy (done + `test_policy_p2.py` / `test_log_sample.py`)**
+
+- [x] P2-1 Rate-limit dimensions  
+- [x] P2-2 Per-route quota  
+- [x] P2-3 Global QPS cap  
+- [x] P2-4 URI / UA blocklist  
+- [x] P2-5 Access log sampling  
+
+**P3 (partial)**
+
+- [x] P3-1 Gray tag header  
+- [ ] P3-2 Header/URI rewrite  
+- [ ] P3-3 Admin RBAC  
+- [x] P3-4 Config snapshot  
+- [ ] P3-5 Developer surface  
+
+(P4: see §4.)
 
 ---
 
