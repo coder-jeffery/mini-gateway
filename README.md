@@ -69,7 +69,9 @@ flowchart LR
 | `/health`、`/ready` | ✅ |
 | Web 管理台（全存储模式） | ✅ |
 | 访问日志 api_key / subject **脱敏** | ✅ |
-| Prometheus `/metrics`、灰度路由 | ❌ P1+ |
+| Prometheus `GET /metrics` | ✅ |
+| 存储 **错误率熔断**（半开）+ `pass`/`reject` 降级 | ✅ env 可配 |
+| 灰度路由、多维度限流 | ❌ P2+ |
 
 契约与示例：[postman/](./postman/) · 运维手册：[operation-doc.md](./operation-doc.md)
 
@@ -115,7 +117,10 @@ Docker 服务：`gw-openresty`（8080）、可选 `gw-redis`（6379）、可选 
 ```bash
 curl -s http://127.0.0.1:8080/health
 curl -s http://127.0.0.1:8080/ready
+curl -s http://127.0.0.1:8080/metrics | head
 ```
+
+存储熔断（`GATEWAY_STORAGE_CB_*`）默认 **10s 窗口、50% 错误率、最少 5 次采样** 后打开；冷却 **30s** 进入半开。降级策略 `GATEWAY_STORAGE_CB_POLICY=pass|reject`（兼容旧名 `GATEWAY_CIRCUIT_BREAK_POLICY`）。响应头 `X-Storage-Circuit-State`：`closed` / `open` / `half_open`。
 
 ### 业务流量（原样转发路径）
 
@@ -133,7 +138,27 @@ python3 test/test_hmac.py         # 需网关 listening :8080
 python3 test/test_oauth2.py       # 网关须 GATEWAY_AUTH_MODE=bearer|both
 ```
 
-CI：GitHub Actions [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)（UI build + memory 网关冒烟）。
+**与 GitHub Actions 一致的本地冒烟**（集群内 `mock-upstream`，不依赖外网 httpbin）：
+
+```bash
+./scripts/ci-smoke.sh          # 全量：含数据面预检 + OAuth E2E
+./scripts/ci-smoke-lite.sh     # 轻量：跳过数据面预检与 bearer 200（控制面 + 401 用例）
+./scripts/ci-stack-up.sh       # 仅起栈
+./scripts/ci-stack-down.sh     # 销毁 ci 栈
+```
+
+轻量 / 绕过数据面预检（容器已健康但 `GET /` 仍非 200 时）：
+
+```bash
+CI_STACK_SKIP_DATA_PLANE_PREFLIGHT=1 ./scripts/ci-stack-up.sh
+CI_SMOKE_LITE=1 python3 test/test_hmac.py   # 仍需 :8080
+```
+
+无 Docker 时只能跑 `python3 test/test_log_redact.py`。
+
+日常 `./start.sh` 仍默认 **httpbin 上游**；`mock-upstream` 在 `docker-compose.yml` 中**无 profile**（保证 `docker-compose.ci.yml` 的 `depends_on` 可解析），但**不会**被 `start.sh` 自动拉起。
+
+CI：GitHub Actions [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) 调用 `scripts/ci-stack-up.sh`（与 `ci-smoke.sh` 同源）。
 
 ---
 

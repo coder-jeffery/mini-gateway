@@ -42,31 +42,11 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install requests
-      - name: Build and start gateway (memory)
-        run: |
-          export GATEWAY_STORAGE=memory
-          export GATEWAY_AUTH_MODE=both
-          export OAUTH2_JWT_SECRET=oauth2-dev-secret
-          docker compose build openresty
-          docker compose up -d openresty
-      - name: Wait for gateway
-        run: |
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8080/health >/dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "gateway did not become healthy" >&2
-          docker logs gw-openresty || true
-          exit 1
-      - name: Python smoke tests
+      - name: Gateway smoke (lite — skip data-plane preflight)
         env:
+          GATEWAY_STORAGE: memory
           GATEWAY_AUTH_MODE: both
           OAUTH2_JWT_SECRET: oauth2-dev-secret
-        run: |
-          python3 test/test.py
-          python3 test/test_hmac.py
-          python3 test/test_oauth2.py
+        run: ./scripts/ci-smoke-lite.sh
       - if: always()
-        run: docker compose down -v || true
+        run: ./scripts/ci-stack-down.sh

@@ -15,7 +15,7 @@
 | **数据面** | 转发、鉴权、限流、熔断执行 | `nginx/lua/access_check.lua`、`oauth_validate.lua`、`nginx.conf` |
 | **控制面** | 配置 CRUD、下发、存储后端 | `admin_api.lua`、`admin_api_v1.lua`、`store/*` |
 | **管理面** | 人用的控制台 | `ui/`（Next.js → HMAC 调 `/admin/gw/v1`） |
-| **观测面** | 指标、日志、告警 | `log_access.lua`；**缺口**：`/metrics`、脱敏、大盘 |
+| **观测面** | 指标、日志、告警 | `log_access.lua` + `log_redact.lua`（访问日志脱敏）；**缺口**：`/metrics`、Grafana/告警、错误日志脱敏 |
 | **策略/安全面** | 集中策略（WAF、OPA 等） | 当前：**IP 白名单 + Admin 白名单 + OAuth scope**；远期 OPA/路径黑名单 |
 | **扩展面** | 插件 / Wasm / 外部鉴权 | **未做**；MVP 不纳入 |
 | **开发者面** | 门户、文档、Key 申请 | **未做**；P3 可选 |
@@ -29,17 +29,21 @@
 | | 动态路由 / 灰度 / 镜像 | ❌ | P3 |
 | 认证鉴权 | API Key | ✅ | — |
 | | OAuth2 JWT（HS256/RS256） | ✅ | — |
-| | Admin Bearer + HMAC | ✅ v0/v1 | **P0** 管理 API 统一 |
+| | Admin Bearer + HMAC（v0/v1 **统一 store**） | ✅ | — |
+| | 上游多 peer 主动/被动健康检查 + 加权 LB | ✅ | — |
 | 安全防护 | 业务 IP 白名单、Admin IP 白名单 | ✅ | — |
-| | 日志脱敏、路径/UA 拦截 | ❌ | P0 脱敏；P2 路径黑名单 |
+| | 访问日志凭证脱敏（api_key / auth_subject） | ✅ | `log_redact.lua` |
+| | 路径/UA 拦截、错误日志脱敏 | ❌ | P2 |
 | 流量控制 | 滑动窗口、按 Key 配额 | ✅ | — |
 | | 多维度 / 接口级 / 全局限流 | ❌ | P2 |
-| | 错误率熔断 | ⚠️ 存储故障简易 pass/reject | **P1** |
+| | 错误率熔断（窗口 + 半开） | ✅ | `storage_circuit.lua` |
 | | 漏桶排队 | ❌ | P3 |
 | 可观测性 | 异步访问日志、Request ID | ✅ | — |
-| | Prometheus `/metrics` | ❌ | **P1** |
+| | Prometheus `/metrics` | ✅ | `GET /metrics` |
 | | 日志采样、管理操作审计分类 | ❌ | P2 |
-| 管理 / 存储 | memory / redis / sqlite | ✅ 业务链路 | **P0** UI 与 v1 存储一致 |
+| 管理 / 存储 | memory / redis / sqlite | ✅ | UI + v1 HMAC 全模式 |
+| | v0 `token_list`（列表项脱敏 token） | ✅ | 仅 v0 Bearer，未挂 v1/UI |
+| | GitHub Actions CI（UI build + 网关冒烟） | ✅ | `.github/workflows/ci.yml` |
 | 协议 | HTTP | ✅ | P4 WebSocket | TCP/UDP ｜ HTTP/2 ｜ HTTP/3 ｜ WebSocket / SSE ｜ gRPC 代理 ｜ HTTP 转 gRPC ｜ Dubbo｜ MQTT｜Redis/MySQL 等协议感知｜MCP 转换
 
 
@@ -56,8 +60,11 @@
 - [x] **控制面 v0**：`/admin/gw`（Bearer admin token + 全存储抽象）
 - [x] **控制面 v1**：`/admin/gw/v1`（HMAC + nonce 防重放；**与 v0 同 `store` 抽象**）
 - [x] **管理面**：UI 三 Tab（API Key、业务/管理白名单）
-- [x] **可观测（轻量）**：`X-Request-Id`、限流响应头、`log_by_lua` 异步写访问日志
-- [x] **部署**：Docker Compose 三容器脚本链、` .env.example`
+- [x] **可观测（轻量）**：`X-Request-Id`、限流响应头、`log_by_lua` 异步写访问日志、**访问日志脱敏**
+- [x] **探活**：`/health`、`/ready`
+- [x] **上游**：可配置 peer/超时/Host；健康检查与 failover（`upstream_*`）
+- [x] **部署 / CI**：Docker Compose 三容器脚本链、`.env.example`、GitHub Actions
+- [x] **产品文档**：根目录 `README.md`（架构图、能力表、存储选型）
 
 ---
 
@@ -72,9 +79,9 @@
 | M1 | 上游地址、超时、Host 头可配置（无改代码发版） | 环境变量或 admin 配置 + `curl` 通真实后端 |
 | M2 | `GET /health`（进程级）、`GET /ready`（存储可达） | K8s/Compose healthcheck 通过 |
 | M3 | 管理路径一致：**UI 与自动化脚本**在选定存储模式下均可 CRUD | `test_hmac.py` + UI 手测；sqlite 模式同类用例 |
-| M4 | 访问日志与错误日志**须脱敏** api_key / Bearer | 抽检 `gateway:access_log` / 文件日志 |
+| M4 | 访问日志与错误日志**须脱敏** api_key / Bearer | 访问日志 ✅；**nginx error_log / Bearer 原文** ⚠️ 未统一脱敏 |
 | M5 | 根目录 README：架构图、能力表、存储模式选型、运维入口 | 新同学 30 分钟内按文档起全栈 |
-| M6 | CI：至少跑 `test/test.py`、`test_hmac.py`、`test_oauth2.py`（可选门禁） | PR 绿 |
+| M6 | CI：至少跑 `test/test.py`、`test_hmac.py`、`test_oauth2.py`（可选门禁） | ✅ workflow；**sqlite/redis 模式未进 CI** 
 
 ### 3.2 P0 任务清单
 
@@ -177,7 +184,7 @@
 
 ## 7. 快速勾选（给排期用）
 
-**P0 MVP（未全部完成前不发「产品版」标签）**
+**P0 MVP（2026-03：P0-1～P0-8 已勾选，可称「MVP 技术闭环」；M4/M6 仍有 ⚠️ 见 §3.1）**
 
 - [x] P0-1 可配置上游（默认透传原始 URI；`GATEWAY_UPSTREAM_PATH` 固定路径）  
 - [x] P0-2 /health、/ready  
@@ -190,9 +197,9 @@
 
 **P1 生产就绪**
 
-- [ ] P1-1 错误率熔断  
-- [ ] P1-2 /metrics  
-- [ ] P1-3 熔断策略配置  
+- [x] P1-1 错误率熔断  
+- [x] P1-2 /metrics  
+- [x] P1-3 熔断策略配置  
 - [ ] P1-4 管理审计日志  
 - [ ] P1-5 配置本地缓存  
 
@@ -205,3 +212,4 @@
 | 日期 | 说明 |
 |------|------|
 | 2026-03-26 | 按最小 MVP 重写：分层映射、基线、P0 验收标准、P1–P4 路线图、与 `develop-design.md` 对齐 |
+| 2026-03-26 | P0 全项完成：v1 store、UI 全存储、日志脱敏、token_list、README、CI；刷新 §1 能力表与 M4/M6 备注 |

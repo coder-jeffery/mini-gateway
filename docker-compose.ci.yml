@@ -1,0 +1,39 @@
+# CI / local smoke overlay: in-cluster mock upstream (no external httpbin).
+# mock-upstream is always defined in docker-compose.yml (no profile) so depends_on
+# resolves on any `docker compose -f ... -f docker-compose.ci.yml` command.
+#
+# Single entry (same as GitHub Actions): ./scripts/ci-smoke.sh
+# Stack only: ./scripts/ci-stack-up.sh
+services:
+  mock-upstream:
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/status/200"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 2s
+
+  openresty:
+    depends_on:
+      mock-upstream:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:8080/health 2>/dev/null | grep -q healthy",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    environment:
+      GATEWAY_STORAGE: memory
+      GATEWAY_AUTH_MODE: both
+      OAUTH2_JWT_SECRET: oauth2-dev-secret
+      GATEWAY_UPSTREAM_PEERS: mock-upstream:80
+      GATEWAY_UPSTREAM_SCHEME: http
+      GATEWAY_UPSTREAM_HOST: mock-upstream
+      GATEWAY_UPSTREAM_HEALTH_PATH: /status/200
+      GATEWAY_UPSTREAM_HEALTH_INTERVAL: "300"
+      GATEWAY_UPSTREAM_HEALTH_FAIL_THRESHOLD: "50"

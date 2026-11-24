@@ -1,4 +1,16 @@
 services:
+  mock-upstream:
+    # Always in the compose project graph (no profile) so ci.yml depends_on is valid.
+    # Not started by ./start.sh; use scripts/ci-stack-up.sh or ci-smoke.sh.
+    image: nginx:alpine
+    pull_policy: if_not_present
+    container_name: gw-mock-upstream
+    volumes:
+      - ./docker/mock-upstream/default.conf:/etc/nginx/conf.d/default.conf:ro
+    expose:
+      - "80"
+    restart: "no"
+
   redis:
     profiles: ["redis"]
     image: ${REDIS_IMAGE:-redis:7-alpine}

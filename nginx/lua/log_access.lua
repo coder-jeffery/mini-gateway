@@ -1,10 +1,16 @@
 local store_mod = require "store"
 local upstream_passive = require "upstream_passive"
 local redact = require "log_redact"
+local metrics = require "gateway_metrics"
 local cjson = require "cjson"
 local ngx = ngx
 
 upstream_passive.observe()
+
+metrics.incr_http_status(ngx.status)
+if ngx.header["X-RateLimit-Whitelist"] == "true" then
+    metrics.incr("whitelist_bypass_total")
+end
 
 local function log_timer(premature, log_data)
     if premature then
