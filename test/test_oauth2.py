@@ -12,11 +12,16 @@ sys.path.insert(0, os.path.dirname(__file__))
 from jwt_client import build_case, gateway_url
 
 
+def auth_url() -> str:
+    """Data-plane URL (needs a reachable upstream after auth)."""
+    return os.environ.get("GATEWAY_AUTH_TEST_URL", gateway_url())
+
+
 def call_bearer(token: str | None) -> tuple[int, dict]:
     headers = {"Accept": "application/json"}
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(gateway_url(), headers=headers, method="GET")
+    req = urllib.request.Request(auth_url(), headers=headers, method="GET")
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return resp.status, __import__("json").loads(resp.read().decode() or "{}")

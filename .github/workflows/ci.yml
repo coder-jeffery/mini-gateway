@@ -47,8 +47,13 @@ jobs:
           export GATEWAY_STORAGE=memory
           export GATEWAY_AUTH_MODE=both
           export OAUTH2_JWT_SECRET=oauth2-dev-secret
+          export GATEWAY_UPSTREAM_PEERS=mock-upstream:80
+          export GATEWAY_UPSTREAM_SCHEME=http
+          export GATEWAY_UPSTREAM_HOST=mock-upstream
+          export GATEWAY_UPSTREAM_HEALTH_PATH=/status/200
+          export GATEWAY_UPSTREAM_HEALTH_INTERVAL=60
           docker compose build openresty
-          docker compose up -d openresty
+          docker compose --profile ci up -d mock-upstream openresty
       - name: Wait for gateway
         run: |
           for i in $(seq 1 30); do
@@ -70,4 +75,4 @@ jobs:
           python3 test/test_oauth2.py
           python3 test/test_metrics.py
       - if: always()
-        run: docker compose down -v || true
+        run: docker compose --profile ci down -v || true

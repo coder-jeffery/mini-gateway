@@ -1,4 +1,15 @@
 services:
+  mock-upstream:
+    profiles: ["ci"]
+    image: nginx:alpine
+    pull_policy: if_not_present
+    container_name: gw-mock-upstream
+    volumes:
+      - ./docker/mock-upstream/default.conf:/etc/nginx/conf.d/default.conf:ro
+    expose:
+      - "80"
+    restart: "no"
+
   redis:
     profiles: ["redis"]
     image: ${REDIS_IMAGE:-redis:7-alpine}
