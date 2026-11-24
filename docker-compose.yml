@@ -1,7 +1,7 @@
 services:
   mock-upstream:
-    # Always defined (compose can resolve depends_on). Starts only when explicitly
-    # requested or via docker-compose.ci.yml (CI / local smoke).
+    # Always in the compose project graph (no profile) so ci.yml depends_on is valid.
+    # Not started by ./start.sh; use scripts/ci-stack-up.sh or ci-smoke.sh.
     image: nginx:alpine
     pull_policy: if_not_present
     container_name: gw-mock-upstream

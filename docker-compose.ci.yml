@@ -1,11 +1,22 @@
 # CI / local smoke overlay: in-cluster mock upstream (no external httpbin).
-# Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build mock-upstream openresty
+# mock-upstream is always defined in docker-compose.yml (no profile) so depends_on
+# resolves on any `docker compose -f ... -f docker-compose.ci.yml` command.
+#
+# Single entry (same as GitHub Actions): ./scripts/ci-smoke.sh
+# Stack only: ./scripts/ci-stack-up.sh
 services:
+  mock-upstream:
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/status/200"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 2s
+
   openresty:
     depends_on:
       mock-upstream:
-        condition: service_started
+        condition: service_healthy
     environment:
       GATEWAY_AUTH_MODE: both
       OAUTH2_JWT_SECRET: oauth2-dev-secret

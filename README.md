@@ -138,7 +138,17 @@ python3 test/test_hmac.py         # 需网关 listening :8080
 python3 test/test_oauth2.py       # 网关须 GATEWAY_AUTH_MODE=bearer|both
 ```
 
-CI：GitHub Actions [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)（UI build + memory 网关冒烟）。
+**与 GitHub Actions 一致的本地冒烟**（集群内 `mock-upstream`，不依赖外网 httpbin）：
+
+```bash
+./scripts/ci-smoke.sh          # 起栈 + 预检 + 全部 Python 冒烟
+./scripts/ci-stack-up.sh       # 仅起栈（同 CI gateway job）
+./scripts/ci-stack-down.sh     # 销毁 ci 栈
+```
+
+日常 `./start.sh` 仍默认 **httpbin 上游**；`mock-upstream` 在 `docker-compose.yml` 中**无 profile**（保证 `docker-compose.ci.yml` 的 `depends_on` 可解析），但**不会**被 `start.sh` 自动拉起。
+
+CI：GitHub Actions [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) 调用 `scripts/ci-stack-up.sh`（与 `ci-smoke.sh` 同源）。
 
 ---
 
