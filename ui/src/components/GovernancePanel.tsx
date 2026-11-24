@@ -116,7 +116,7 @@ export function GovernancePanel() {
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-8">
       <section className="ui-panel overflow-hidden">
         <div className="ui-panel-header">
           <span>管理审计</span>
@@ -130,10 +130,10 @@ export function GovernancePanel() {
             </button>
           </div>
         </div>
-        <div className="space-y-3 p-4">
+        <div className="space-y-4 p-5 sm:p-6">
           {auditStatus ? <Alert tone="err" message={auditStatus} /> : null}
           <ul
-            className="rounded-md border text-sm [&>li+li]:border-t"
+            className="overflow-hidden rounded-md border text-sm [&>li+li]:border-t"
             style={{ borderColor: "var(--border-subtle)" }}
           >
             {audit.length === 0 ? (
@@ -167,7 +167,7 @@ export function GovernancePanel() {
         <div className="ui-panel-header">
           <span>RBAC · v1</span>
         </div>
-        <div className="space-y-3 p-4">
+        <div className="space-y-4 p-5 sm:p-6">
           <form onSubmit={onRoleSave} className="flex flex-wrap items-end gap-3">
             <label className="flex min-w-[12rem] flex-col gap-1 text-sm">
               <span style={{ color: "var(--fg-secondary)" }}>角色</span>
@@ -198,7 +198,7 @@ export function GovernancePanel() {
         <div className="ui-panel-header">
           <span>数据面策略</span>
         </div>
-        <div className="space-y-4 p-4">
+        <div className="space-y-5 p-5 sm:p-6">
           {policyMsg ? (
             <Alert
               tone={policyMsg.includes("失败") ? "err" : "ok"}

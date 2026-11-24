@@ -190,7 +190,7 @@ export function ApiKeyPanel() {
         {showingForm ? (
           <form
             onSubmit={onSubmit}
-            className="flex min-h-[320px] flex-col px-5 py-6"
+            className="flex min-h-[320px] flex-col px-6 py-8 sm:px-8"
           >
             {formStatus ? (
               <div className="mb-4">
