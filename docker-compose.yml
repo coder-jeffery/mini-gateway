@@ -1,6 +1,7 @@
 services:
   mock-upstream:
-    profiles: ["ci"]
+    # Always defined (compose can resolve depends_on). Starts only when explicitly
+    # requested or via docker-compose.ci.yml (CI / local smoke).
     image: nginx:alpine
     pull_policy: if_not_present
     container_name: gw-mock-upstream

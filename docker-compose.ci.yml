@@ -1,5 +1,6 @@
-# CI overlay: in-cluster mock upstream (no external httpbin).
-# Usage: docker compose -f docker-compose.yml -f docker-compose.ci.yml --profile ci up -d
+# CI / local smoke overlay: in-cluster mock upstream (no external httpbin).
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build mock-upstream openresty
 services:
   openresty:
     depends_on:

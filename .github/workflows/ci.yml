@@ -47,7 +47,7 @@ jobs:
           GATEWAY_STORAGE: memory
         run: |
           docker compose -f docker-compose.yml -f docker-compose.ci.yml build openresty
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml --profile ci up -d --force-recreate mock-upstream openresty
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --force-recreate mock-upstream openresty
       - name: Wait for gateway and verify upstream env
         run: |
           for i in $(seq 1 30); do
@@ -89,4 +89,4 @@ jobs:
           python3 test/test_oauth2.py
           python3 test/test_metrics.py
       - if: always()
-        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml --profile ci down -v || true
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v || true
