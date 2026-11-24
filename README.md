@@ -1,155 +1,177 @@
+# mini-gateway
 
-Intro:
-1. **Phase choice:** use `access_by_lua` for auth and rate limits; older OpenResty cannot use Redis cosockets in rewrite; use content phase for response bodies.
-2. Redis clients must use `set_keepalive` pooling or high concurrency opens too many connections.
-3. Headers via `ngx.var.http_*` are lowercase: `X-Api-Key` → `ngx.var.http_x_api_key`.
-4. Fixed windows can double-spike at boundaries; sliding windows use Redis sorted sets.
-5. `wrk` uses one source IP and hits 429 quickly; rate limit by API key instead of IP for load tests.
-6. Configure cosocket timeouts so a slow Redis does not block workers.
+OpenResty 上的轻量级 API 网关：**鉴权、滑动窗口限流、IP 白名单、可配置上游、管理 API 与 Web UI**。适合学习或小团队 MVP；详细路线图见 [to-do-list-zh-CN.md](./to-do-list-zh-CN.md)。
 
-```bash
-cd mini-gateway
-./start-redis.sh    # ① Redis + 初始化（成功后才继续）
-./start-gateway.sh  # ② 网关（依赖 Redis 就绪）
-./start-ui.sh       # ③ 管理 UI（依赖网关就绪）
-./start-all.sh      # 按顺序执行 ①→②→③
-./start.sh          # 仅网关栈（memory/sqlite 或 redis 一步起）
-./stop.sh           # 停止全部容器
+---
+
+## 架构
+
+```mermaid
+flowchart LR
+  subgraph clients [Clients]
+    B[业务调用方]
+    A[管理员 / UI / CI]
+  end
+
+  subgraph data_plane [数据面 OpenResty]
+    GW[access_check / oauth_validate]
+    RL[滑动窗口限流]
+    BAL[upstream_balancer]
+    LOG[log_access 脱敏]
+  end
+
+  subgraph control_plane [控制面]
+    V0["/admin/gw Bearer"]
+    V1["/admin/gw/v1 HMAC"]
+    STORE[(store 抽象)]
+  end
+
+  subgraph mgmt [管理面]
+    UI[Next.js UI]
+  end
+
+  subgraph backends [存储后端]
+    MEM[memory]
+    RED[redis]
+    SQL[sqlite]
+  end
+
+  B -->|X-Api-Key / Bearer| GW
+  GW --> RL --> BAL --> UP[上游服务]
+  GW --> LOG --> STORE
+  A --> V0 --> STORE
+  A --> V1 --> STORE
+  UI -->|服务端 HMAC| V1
+  STORE --> MEM
+  STORE --> RED
+  STORE --> SQL
 ```
 
-Docker 三容器：`gw-redis`（6379）、`gw-openresty`（8080）、`gw-ui`（3000）。端口可用 `.env` 的 `REDIS_PORT` / `GATEWAY_PORT` / `UI_PORT` 调整。
+| 面 | 职责 | 仓库落点 |
+|----|------|----------|
+| 数据面 | 转发、鉴权、限流 | `nginx/lua/access_check.lua`、`oauth_validate.lua` |
+| 控制面 | Key / 白名单 CRUD | `admin_api.lua`、`admin_api_v1.lua`、`store/*` |
+| 管理面 | 控制台 | `ui/` |
+| 观测面 | 访问日志、Request ID | `log_access.lua`（凭证脱敏） |
 
-### Redis 镜像拉取失败（`context deadline exceeded` / `docker.m.daocloud.io`）
+---
 
-原因：Docker Desktop 配置了 **registry mirror**（如 DaoCloud），访问超时，与 mini-gateway 脚本无关。
+## 能力矩阵（当前 MVP）
 
-处理：
+| 能力 | 状态 |
+|------|------|
+| API Key + OAuth2 JWT（HS256/RS256） | ✅ |
+| 滑动窗口限流、按 Key 配额 | ✅ |
+| 业务 / 管理 IP 白名单 | ✅ |
+| 存储 memory / redis / sqlite | ✅ |
+| 管理 v0 Bearer + v1 HMAC（**统一 store**） | ✅ |
+| 上游多 peer 健康检查与负载均衡 | ✅ |
+| `/health`、`/ready` | ✅ |
+| Web 管理台（全存储模式） | ✅ |
+| 访问日志 api_key / subject **脱敏** | ✅ |
+| Prometheus `/metrics`、灰度路由 | ❌ P1+ |
 
-1. Docker Desktop → **Settings → Docker Engine**，检查 `registry-mirrors`；去掉失效的 `docker.m.daocloud.io` 或换可用镜像源，**Apply & Restart**。
-2. 手动拉取后再启动：`docker pull redis:7-alpine`，然后 `./start-redis.sh`。
-3. 本地已有镜像时，compose 已设 `pull_policy: if_not_present`，不会重复拉取。
-4. 指定镜像：`REDIS_IMAGE=redis:7-alpine ./start-redis.sh`（或 `.env` 中设置 `REDIS_IMAGE`）。
+契约与示例：[postman/](./postman/) · 运维手册：[operation-doc.md](./operation-doc.md)
 
-### Storage (`GATEWAY_STORAGE`)
+---
 
-| Value | Description |
-|-------|-------------|
-| `memory` | **Default.** `lua_shared_dict` in OpenResty (fast, not persisted across container recreate) |
-| `redis` | Redis + `redis-init` bootstrap ( `./start.sh` with `GATEWAY_STORAGE=redis` ) |
-| `sqlite` | File DB at `./data/gateway.db` (persisted volume, needs `openresty/Dockerfile` build) |
+## 存储选型
+
+| 模式 | 适用场景 | 持久化 | 管理 UI |
+|------|----------|--------|---------|
+| **memory**（默认） | 本地开发、单测、无外部依赖 | 容器重建后丢失 | ✅ v1 HMAC |
+| **sqlite** | 单机小部署、演示落盘 | `./data/gateway.db` | ✅ |
+| **redis** | 与现有 Redis 运维体系一致、多副本共享配置 | Redis AOF/RDB | ✅ |
 
 ```bash
 GATEWAY_STORAGE=memory ./start.sh
-GATEWAY_STORAGE=redis ./start.sh
-GATEWAY_STORAGE=sqlite ./start.sh
+GATEWAY_STORAGE=sqlite ./start.sh    # 需 openresty/Dockerfile 含 lsqlite3
+GATEWAY_STORAGE=redis ./start.sh     # 或 ./start-redis.sh + ./start-gateway.sh
 ```
 
-Default credentials after bootstrap: API key `mini-key`, admin Bearer token `mini-token`.
+Bootstrap 默认凭证：**API Key** `mini-key` · **Admin Bearer** `mini-token` · **HMAC Secret** `admin-secret-2026`（见 `.env.example`）。
 
-### Upstream request URI
+---
 
-默认把客户端的路径和查询串原样转到上游（方法、body、百分号编码、重复参数都保留）。`GET /v1/orders?a=1&a=2` 在上游仍是这个 request-target。
-
-`GATEWAY_UPSTREAM_PATH` 未设置或为空时走这条路径。把它设成路径后，该值会替换上游 request-target，客户端查询串不再转发。旧的 httpbin 演示把所有请求固定到 `/get`，需要显式打开：
+## 快速启动
 
 ```bash
-GATEWAY_UPSTREAM_PATH=/get GATEWAY_STORAGE=memory ./start.sh
-curl -H "X-Api-Key: mini-key" http://127.0.0.1:8080/anything
-# upstream request-target is /get
+cd mini-gateway
+cp .env.example .env   # 可选
+
+./start.sh                              # memory 网关（8080）
+./start-ui.sh                           # 管理 UI（3000，profile ui）
+./start-all.sh                          # redis + 网关 + UI 全栈
+
+# 管理台本地开发
+cp ui/.env.example ui/.env.local
+cd ui && npm install && npm run dev
 ```
 
-不设置该变量时，上游看到的就是客户端路径。httpbin 的 `/get` 示例：
+Docker 服务：`gw-openresty`（8080）、可选 `gw-redis`（6379）、可选 `gw-ui`（3000）。端口见 `.env` 中 `GATEWAY_PORT` / `UI_PORT` / `REDIS_PORT`。
+
+### 探活
 
 ```bash
-curl -H "X-Api-Key: mini-key" http://127.0.0.1:8080/get
+curl -s http://127.0.0.1:8080/health
+curl -s http://127.0.0.1:8080/ready
 ```
 
-Option 1:
+### 业务流量（原样转发路径）
+
 ```bash
-curl -H "X-Api-Key: mini-key" http://127.0.0.1:8080/get
+curl -i -H "X-Api-Key: mini-key" http://127.0.0.1:8080/get
 ```
 
-Option 2:
+默认透传客户端 URI；固定上游路径时设置 `GATEWAY_UPSTREAM_PATH`（见 [operation-doc.md](./operation-doc.md)）。
+
+### 自动化测试
+
 ```bash
-docker exec -it gw-redis redis-cli SET apikey:abc123 1
-curl -H "X-Api-Key: abc123" http://127.0.0.1:8080/get
+python3 test/test_log_redact.py   # 脱敏规则（无网关）
+python3 test/test_hmac.py         # 需网关 listening :8080
+python3 test/test_oauth2.py       # 网关须 GATEWAY_AUTH_MODE=bearer|both
 ```
 
-Load test:
-```bash
-wrk -t2 -c20 -d10s -H "X-Api-Key: abc123" http://127.0.0.1:8080/get
-```
+CI：GitHub Actions [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)（UI build + memory 网关冒烟）。
 
-Business IP whitelist:
-```bash
-docker exec -it gw-redis redis-cli
-SADD whitelist:ip 127.0.0.1
-```
+---
 
-```redis
-# Add whitelist IP
-SADD whitelist:ip 127.0.0.1
-# Remove whitelist IP
-SREM whitelist:ip 127.0.0.1
-# List whitelist
-SMEMBERS whitelist:ip
-```
+## 运维与安全
 
-Dynamic quota: `HSET apikey:meta:abc123 limit 20 window 30`  # 20 requests per 30s for this key
+- 访问日志字段 `api_key`、`auth_subject` 经 `log_redact.lua` 打码（形如 `mini***-key`），**不落盘完整密钥**。
+- 管理 v0 `token_list` 仅返回 **脱敏 token** 与元数据；吊销仍使用颁发时返回的完整 token（`token_revoke`）。
+- Docker 内 UI 调用 v1 时，默认 `GATEWAY_ADMIN_TRUST_PRIVATE=1` 信任私网段；生产请收紧 `admin:whitelist:ip`。
 
-```redis
-# Mark api key valid
-SET apikey:abc123 1
+---
 
-# Per-key quota: 20 requests / 30s
-HSET apikey:meta:abc123 limit 20 window 30
+## 文档索引
 
-# Another key: 5 requests / 60s
-SET apikey:xyz789 1
-HSET apikey:meta:xyz789 limit 5 window 60
+| 文档 | 用途 |
+|------|------|
+| [operation-doc.md](./operation-doc.md) | curl / OAuth / HMAC 手册 |
+| [to-do-list-zh-CN.md](./to-do-list-zh-CN.md) | MVP / P1–P4 路线图 |
+| [develop-design.md](./develop-design.md) | P2+ 详细设计参考 |
+| [ui/README.md](./ui/README.md) | 管理台环境变量与部署 |
 
-# Whitelist IP
-SADD whitelist:ip 127.0.0.1
+---
 
-# Inspect quota
-HGETALL apikey:meta:abc123
-```
+## 常见问题
 
-View access logs:
-```bash
-docker exec -it gw-redis redis-cli
-LRANGE gateway:access_log -10 -1
-```
+### Redis 镜像拉取失败（DaoCloud mirror 超时）
 
+Docker Desktop → **Settings → Docker Engine** 检查 `registry-mirrors`；或先 `docker pull redis:7-alpine` 再 `./start-redis.sh`。Compose 使用 `pull_policy: if_not_present`。
 
-docker exec -it gw-redis redis-cli SMEMBERS admin:whitelist:ip
+### OpenResty 实现提示
 
-ADMIN_WHITELIST_IP=127.0.0.1 docker compose up -d
+1. 鉴权限流放在 `access_by_lua`；老版本勿在 rewrite 里用 Redis cosocket。
+2. Redis 客户端须 `set_keepalive` 连接池化。
+3. `ngx.var.http_*` 为小写：`X-Api-Key` → `http_x_api_key`。
+4. 压测用 API Key 限流维度，避免单 IP 过早 429。
+5. cosocket 超时防止慢 Redis 拖死 worker。
 
---
+---
 
-GATEWAY_STORAGE=sqlite ./start.sh
-echo $?   # 应为 0
-curl -H "X-Api-Key: mini-key" http://127.0.0.1:8080/
-ls -la ./data/gateway.db
+## License
 
---
-START_VERBOSE=1 GATEWAY_STORAGE=sqlite ./start.sh
-
---
-docker logs gw-openresty
-
---
-start:
-
-./start.sh                                    # memory（默认，不启 Redis）
-GATEWAY_STORAGE=redis ./start.sh              # Redis + redis-init
-GATEWAY_STORAGE=sqlite ./start.sh             # SQLite 落盘 ./data/
-
---
-curl -i http://127.0.0.1:8080/                              # 401
-curl -i -H "X-Api-Key: mini-key" http://127.0.0.1:8080/get  # 200，路径原样转发
-
-
-apt install nginx-module-http2
-brew install nginx
+See [LICENSE](./LICENSE).

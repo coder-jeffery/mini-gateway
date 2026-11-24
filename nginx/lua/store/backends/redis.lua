@@ -85,6 +85,29 @@ function _M.access_log_append(store, line)
     return store._red:rpush("gateway:access_log", line)
 end
 
+function _M.list_kv_prefix(store, prefix)
+    local red = store._red
+    local ids = {}
+    local seen = {}
+    local cursor = "0"
+    repeat
+        local res, err = red:scan(cursor, "MATCH", prefix .. "*", "COUNT", 200)
+        if not res then
+            return nil, err
+        end
+        cursor = res[1]
+        for _, key in ipairs(res[2]) do
+            local id = key:sub(#prefix + 1)
+            if id ~= "" and not seen[id] then
+                seen[id] = true
+                ids[#ids + 1] = id
+            end
+        end
+    until cursor == "0"
+    table.sort(ids)
+    return ids, nil
+end
+
 function _M.bootstrap(_store, _opts)
     return true, nil
 end

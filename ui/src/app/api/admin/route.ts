@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callAdminV1 } from "@/lib/admin-client";
+import { callAdmin, probeGatewayStorage } from "@/lib/admin-client";
 import type { AdminAction } from "@/lib/admin-types";
 
 const ACTIONS: AdminAction[] = [
@@ -40,8 +40,28 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { status, data } = await callAdminV1(action, fields);
+    const { status, data } = await callAdmin(action, fields);
     return NextResponse.json(data, { status });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "gateway unreachable";
+    return NextResponse.json({ ok: false, msg }, { status: 502 });
+  }
+}
+
+/** Connectivity probe; returns gateway `storage` (memory | redis | sqlite). */
+export async function GET() {
+  try {
+    const probe = await probeGatewayStorage();
+    if (!probe.ok) {
+      return NextResponse.json(
+        { ok: false, msg: probe.msg ?? "gateway unreachable" },
+        { status: 502 },
+      );
+    }
+    return NextResponse.json({
+      ok: true,
+      storage: probe.storage,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "gateway unreachable";
     return NextResponse.json({ ok: false, msg }, { status: 502 });

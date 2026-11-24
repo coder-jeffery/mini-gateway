@@ -1,5 +1,6 @@
 local store_mod = require "store"
 local upstream_passive = require "upstream_passive"
+local redact = require "log_redact"
 local cjson = require "cjson"
 local ngx = ngx
 
@@ -27,9 +28,9 @@ local log_obj = {
     request_id = ngx.ctx.request_id,
     ts = now,
     ip = ngx.var.remote_addr,
-    api_key = ngx.var.http_x_api_key or "",
+    api_key = redact.mask_credential(ngx.var.http_x_api_key or ""),
     auth_type = ngx.ctx.auth_type or "",
-    auth_subject = ngx.ctx.auth_subject or "",
+    auth_subject = redact.mask_credential(ngx.ctx.auth_subject or ""),
     uri = ngx.var.uri,
     status = ngx.status,
     storage = store_mod.name(),

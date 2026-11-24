@@ -2,6 +2,7 @@ local store_mod = require "store"
 local cjson = require "cjson"
 local ngx = ngx
 local apikey_admin = require "apikey_admin"
+local redact = require "log_redact"
 
 local function resp(code, data)
     ngx.status = code
@@ -211,8 +212,34 @@ elseif action == "token_revoke" then
     return resp(200, {ok=true, msg="token revoked"})
 
 elseif action == "token_list" then
+    if not backend.list_kv_prefix then
+        backend.close(handle)
+        return resp(501, {ok=false, msg="token_list unsupported for storage backend"})
+    end
+    local ids, err = backend.list_kv_prefix(handle, "admin:token:")
+    if not ids then
+        backend.close(handle)
+        return resp(500, {ok=false, msg="storage error: " .. tostring(err)})
+    end
+    local now = ngx.now()
+    local tokens = {}
+    for _, token in ipairs(ids) do
+        local raw, get_err = backend.get(handle, "admin:token:" .. token)
+        if not get_err and raw and raw ~= ngx.null and raw ~= "" then
+            local info = cjson.decode(raw)
+            if info then
+                local expired = info.expire_at ~= 0 and now > info.expire_at
+                tokens[#tokens + 1] = {
+                    token = redact.mask_credential(token),
+                    creator = info.creator or "unknown",
+                    expire_at = info.expire_at or 0,
+                    expired = expired,
+                }
+            end
+        end
+    end
     backend.close(handle)
-    return resp(400, {ok=false, msg="token_list not implemented"})
+    return resp(200, {ok=true, tokens=tokens, total=#tokens})
 
 else
     backend.close(handle)

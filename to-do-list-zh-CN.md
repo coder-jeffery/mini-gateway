@@ -180,13 +180,13 @@
 **P0 MVP（未全部完成前不发「产品版」标签）**
 
 - [x] P0-1 可配置上游（默认透传原始 URI；`GATEWAY_UPSTREAM_PATH` 固定路径）  
-- [ ] P0-2 /health、/ready  
+- [x] P0-2 /health、/ready  
 - [x] P0-3 admin v1 → store 抽象  
-- [ ] P0-4 UI 全存储模式  
-- [ ] P0-5 日志脱敏  
-- [ ] P0-6 token_list 或下架  
-- [ ] P0-7 产品 README  
-- [ ] P0-8 CI  
+- [x] P0-4 UI 全存储模式  
+- [x] P0-5 日志脱敏  
+- [x] P0-6 token_list 或下架  
+- [x] P0-7 产品 README  
+- [x] P0-8 CI  
 
 **P1 生产就绪**
 

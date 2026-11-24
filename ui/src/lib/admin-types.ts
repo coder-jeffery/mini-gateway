@@ -25,9 +25,12 @@ export type ApiKeyListResponse = {
   total_pages: number;
 };
 
+export type GatewayStorageBackend = "memory" | "redis" | "sqlite";
+
 export type AdminOkResponse = {
   ok: true;
   msg?: string;
+  storage?: GatewayStorageBackend;
   whitelist?: string[];
   admin_whitelist?: string[];
   apikey?: ApiKeyRecord;
@@ -36,6 +39,11 @@ export type AdminOkResponse = {
   page?: number;
   page_size?: number;
   total_pages?: number;
+};
+
+export type AdminProbeResponse = AdminOkResponse & {
+  msg: "hmac verified";
+  storage: GatewayStorageBackend;
 };
 
 export type AdminErrResponse = {

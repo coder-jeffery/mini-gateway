@@ -179,13 +179,13 @@ Aligned with the recommended order in `develop-design.md`, plus product gaps.
 **P0 MVP (no “product release” tag until all are done)**
 
 - [x] P0-1 Configurable upstream (original URI passthrough by default; `GATEWAY_UPSTREAM_PATH` pins a path)  
-- [ ] P0-2 `/health`, `/ready`  
+- [x] P0-2 `/health`, `/ready`  
 - [x] P0-3 admin v1 → store abstraction  
-- [ ] P0-4 UI all storage modes  
-- [ ] P0-5 Log redaction  
-- [ ] P0-6 `token_list` or remove from docs  
-- [ ] P0-7 Product README  
-- [ ] P0-8 CI  
+- [x] P0-4 UI all storage modes  
+- [x] P0-5 Log redaction  
+- [x] P0-6 `token_list` or remove from docs  
+- [x] P0-7 Product README  
+- [x] P0-8 CI  
 
 **P1 production-ready**
 
