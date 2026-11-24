@@ -62,12 +62,26 @@ local function db(store)
     return store._db
 end
 
+local function kv_expired(raw)
+    if not raw then
+        return true
+    end
+    local ok, t = pcall(cjson.decode, raw)
+    if not ok or type(t) ~= "table" or t._ttl_exp == nil then
+        return false
+    end
+    return ngx.now() > tonumber(t._ttl_exp)
+end
+
 function _M.exists(store, key)
-    local stmt = db(store):prepare("SELECT 1 FROM kv WHERE k = ? LIMIT 1")
-    stmt:bind_values(key)
-    local row = stmt:step()
-    stmt:finalize()
-    return row == lsqlite3.ROW and 1 or 0, nil
+    local val, err = _M.get(store, key)
+    if err then
+        return nil, err
+    end
+    if val == nil or val == ngx.null then
+        return 0, nil
+    end
+    return 1, nil
 end
 
 function _M.get(store, key)
@@ -79,6 +93,16 @@ function _M.get(store, key)
         val = stmt:get_value(0)
     end
     stmt:finalize()
+    if val and kv_expired(val) then
+        _M.del(store, key)
+        return nil, nil
+    end
+    if val then
+        local ok, t = pcall(cjson.decode, val)
+        if ok and type(t) == "table" and t._ttl_v ~= nil then
+            return t._ttl_v, nil
+        end
+    end
     return val, nil
 end
 
@@ -88,6 +112,12 @@ function _M.set(store, key, value)
     stmt:step()
     stmt:finalize()
     return true, nil
+end
+
+function _M.setex(store, key, value, ttl_sec)
+    local exp = ngx.now() + (tonumber(ttl_sec) or 0)
+    local payload = cjson.encode({ _ttl_v = value, _ttl_exp = exp })
+    return _M.set(store, key, payload)
 end
 
 function _M.del(store, key)

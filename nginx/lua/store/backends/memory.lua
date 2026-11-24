@@ -58,6 +58,12 @@ function _M.set(_store, key, value)
     return true, nil
 end
 
+function _M.setex(_store, key, value, ttl_sec)
+    local d = dict()
+    d:set(k(key), value, ttl_sec)
+    return true, nil
+end
+
 function _M.del(_store, key)
     local d = dict()
     d:delete(k(key))

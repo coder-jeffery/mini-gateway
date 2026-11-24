@@ -53,7 +53,7 @@ Source of truth is the repo; regression via `test/`, `postman/`, `operation-doc.
 - [x] **Whitelists:** business IPs skip rate limits; admin IPs protect admin APIs
 - [x] **Storage:** `GATEWAY_STORAGE=memory|redis|sqlite` + worker bootstrap
 - [x] **Control plane v0:** `/admin/gw` (Bearer admin token + full store abstraction)
-- [x] **Control plane v1:** `/admin/gw/v1` (HMAC + nonce replay protection; **Redis-only today**)
+- [x] **Control plane v1:** `/admin/gw/v1` (HMAC + nonce replay protection; **same `store` abstraction as v0**)
 - [x] **Management plane:** UI with three tabs (API keys, business/admin whitelists)
 - [x] **Light observability:** `X-Request-Id`, rate-limit headers, async access logs via `log_by_lua`
 - [x] **Deployment:** Docker Compose three-container scripts, `.env.example`
@@ -180,7 +180,7 @@ Aligned with the recommended order in `develop-design.md`, plus product gaps.
 
 - [x] P0-1 Configurable upstream (original URI passthrough by default; `GATEWAY_UPSTREAM_PATH` pins a path)  
 - [ ] P0-2 `/health`, `/ready`  
-- [ ] P0-3 admin v1 → store abstraction  
+- [x] P0-3 admin v1 → store abstraction  
 - [ ] P0-4 UI all storage modes  
 - [ ] P0-5 Log redaction  
 - [ ] P0-6 `token_list` or remove from docs  

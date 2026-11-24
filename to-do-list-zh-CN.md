@@ -54,7 +54,7 @@
 - [x] **白名单**：业务 IP 免限流；管理 IP 保护 Admin
 - [x] **存储**：`GATEWAY_STORAGE=memory|redis|sqlite` + worker bootstrap
 - [x] **控制面 v0**：`/admin/gw`（Bearer admin token + 全存储抽象）
-- [x] **控制面 v1**：`/admin/gw/v1`（HMAC + nonce 防重放；**仅 Redis 直连**）
+- [x] **控制面 v1**：`/admin/gw/v1`（HMAC + nonce 防重放；**与 v0 同 `store` 抽象**）
 - [x] **管理面**：UI 三 Tab（API Key、业务/管理白名单）
 - [x] **可观测（轻量）**：`X-Request-Id`、限流响应头、`log_by_lua` 异步写访问日志
 - [x] **部署**：Docker Compose 三容器脚本链、` .env.example`
@@ -181,7 +181,7 @@
 
 - [x] P0-1 可配置上游（默认透传原始 URI；`GATEWAY_UPSTREAM_PATH` 固定路径）  
 - [ ] P0-2 /health、/ready  
-- [ ] P0-3 admin v1 → store 抽象  
+- [x] P0-3 admin v1 → store 抽象  
 - [ ] P0-4 UI 全存储模式  
 - [ ] P0-5 日志脱敏  
 - [ ] P0-6 token_list 或下架  

@@ -1,10 +1,10 @@
-local redis_util = require "redis_util"
+local store_mod = require "store"
+local config = require "gateway_config"
 local cjson = require "cjson"
 local ngx = ngx
 local hmac = require "resty.hmac"
 local apikey_admin = require "apikey_admin"
 
-local ADMIN_SECRET = "admin-secret-2026"
 local SIGN_WINDOW = 60 -- signature timestamp tolerance (seconds)
 
 local function is_private_ip(ip)
@@ -38,6 +38,7 @@ end
 local function resp(code, data)
     ngx.status = code
     ngx.header["Content-Type"] = "application/json"
+    ngx.header["X-Gateway-Storage"] = store_mod.name()
     ngx.say(cjson.encode(data))
     return ngx.exit(code)
 end
@@ -45,80 +46,84 @@ end
 ngx.req.read_body()
 local body = ngx.req.get_body_data()
 if not body then
-    return resp(400, {ok=false, msg="empty body"})
+    return resp(400, { ok = false, msg = "empty body" })
 end
 local req, err = cjson.decode(body)
 if not req then
-    return resp(400, {ok=false, msg="invalid json"})
+    return resp(400, { ok = false, msg = "invalid json" })
 end
 
 local client_ip = ngx.var.remote_addr
-local red, err = redis_util.new()
-if not red then
-    ngx.log(ngx.ERR, "redis connect err: ", err)
-    return resp(500, {ok=false, msg="redis error"})
+local backend = store_mod.backend()
+local handle, err = backend.new()
+if not handle then
+    ngx.log(ngx.ERR, "storage connect err: ", err)
+    return resp(500, { ok = false, msg = "storage error" })
 end
 
 -- Layer 1: admin IP whitelist
-local in_admin_whitelist, err = red:sismember("admin:whitelist:ip", client_ip)
+local in_admin_whitelist, err = backend.sismember(handle, "admin:whitelist:ip", client_ip)
 if err then
-    redis_util.close(red)
-    return resp(500, {ok=false, msg="redis error"})
+    backend.close(handle)
+    return resp(500, { ok = false, msg = "storage error" })
 end
 if in_admin_whitelist ~= 1 and not admin_ip_allowed(client_ip) then
-    redis_util.close(red)
-    return resp(403, {ok=false, msg="forbidden: ip not in admin whitelist"})
+    backend.close(handle)
+    return resp(403, { ok = false, msg = "forbidden: ip not in admin whitelist" })
 end
 
--- Layer 2: HMAC signature (replaces plain admin_secret comparison)
+-- Layer 2: HMAC signature
 local ts = tonumber(req.ts)
 local nonce = req.nonce
 local sign = req.sign
 if not ts or not nonce or not sign then
-    redis_util.close(red)
-    return resp(400, {ok=false, msg="missing sign params: ts, nonce, sign"})
+    backend.close(handle)
+    return resp(400, { ok = false, msg = "missing sign params: ts, nonce, sign" })
 end
 local now = ngx.now()
 if math.abs(now - ts) > SIGN_WINDOW then
-    redis_util.close(red)
-    return resp(403, {ok=false, msg="signature expired"})
+    backend.close(handle)
+    return resp(403, { ok = false, msg = "signature expired" })
 end
 
--- Replay protection: reject reused nonce
 local nonce_key = "admin:nonce:" .. nonce
-local exists, err = red:exists(nonce_key)
+local exists, err = backend.exists(handle, nonce_key)
 if err then
-    redis_util.close(red)
-    return resp(500, {ok=false, msg="redis error"})
+    backend.close(handle)
+    return resp(500, { ok = false, msg = "storage error" })
 end
 if exists == 1 then
-    redis_util.close(red)
-    return resp(403, {ok=false, msg="nonce reused, replay attack"})
+    backend.close(handle)
+    return resp(403, { ok = false, msg = "nonce reused, replay attack" })
 end
 
--- Server-side sign; match Python hmac.hexdigest() via final(..., true) for hex
 local raw = tostring(ts) .. ":" .. tostring(nonce)
-local h = hmac:new(ADMIN_SECRET, hmac.ALGOS.SHA256)
+local h = hmac:new(config.admin_hmac_secret(), hmac.ALGOS.SHA256)
 if not h then
-    redis_util.close(red)
-    return resp(500, {ok=false, msg="hmac init failed"})
+    backend.close(handle)
+    return resp(500, { ok = false, msg = "hmac init failed" })
 end
 if not h:update(raw) then
-    redis_util.close(red)
-    return resp(500, {ok=false, msg="hmac update failed"})
+    backend.close(handle)
+    return resp(500, { ok = false, msg = "hmac update failed" })
 end
 local calc_sign = h:final(nil, true)
 if not calc_sign or calc_sign ~= sign then
-    redis_util.close(red)
-    return resp(403, {ok=false, msg="invalid signature"})
+    backend.close(handle)
+    return resp(403, { ok = false, msg = "invalid signature" })
 end
--- Mark nonce used with TTL
-red:setex(nonce_key, SIGN_WINDOW, "1")
+
+local ok_setex, setex_err = backend.setex(handle, nonce_key, "1", SIGN_WINDOW)
+if not ok_setex then
+    backend.close(handle)
+    ngx.log(ngx.ERR, "nonce setex err: ", setex_err)
+    return resp(500, { ok = false, msg = "storage error" })
+end
 
 local action = req.action
 if not action then
-    redis_util.close(red)
-    return resp(400, {ok=false, msg="missing action"})
+    backend.close(handle)
+    return resp(400, { ok = false, msg = "missing action" })
 end
 
 if action == "upsert_apikey" then
@@ -126,117 +131,125 @@ if action == "upsert_apikey" then
     local limit = tonumber(req.limit)
     local window = tonumber(req.window)
     if not api_key or not limit or not window then
-        redis_util.close(red)
-        return resp(400, {ok=false, msg="need api_key, limit, window"})
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need api_key, limit, window" })
     end
-    red:set("apikey:" .. api_key, "1")
-    red:hset("apikey:meta:" .. api_key, "limit", limit, "window", window)
-    apikey_admin.index_add_redis(red, api_key)
-    redis_util.close(red)
-    return resp(200, {ok=true, msg="apikey saved"})
+    backend.set(handle, "apikey:" .. api_key, "1")
+    backend.hset(handle, "apikey:meta:" .. api_key, "limit", limit, "window", window)
+    apikey_admin.index_add_backend(backend, handle, api_key)
+    backend.close(handle)
+    return resp(200, { ok = true, msg = "apikey saved" })
 
 elseif action == "del_apikey" then
     local api_key = req.api_key
     if not api_key then
-        redis_util.close(red)
-        return resp(400, {ok=false, msg="need api_key"})
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need api_key" })
     end
-    red:del("apikey:" .. api_key)
-    red:del("apikey:meta:" .. api_key)
-    apikey_admin.index_del_redis(red, api_key)
-    redis_util.close(red)
-    return resp(200, {ok=true, msg="apikey deleted"})
+    backend.del(handle, "apikey:" .. api_key)
+    backend.del(handle, "apikey:meta:" .. api_key)
+    apikey_admin.index_del_backend(backend, handle, api_key)
+    backend.close(handle)
+    return resp(200, { ok = true, msg = "apikey deleted" })
 
 elseif action == "apikey_list" then
-    local result, err = apikey_admin.list_redis(red, req.page, req.page_size)
-    redis_util.close(red)
+    local result, list_err = apikey_admin.list_backend(backend, handle, req.page, req.page_size)
+    backend.close(handle)
     if not result then
-        return resp(500, {ok=false, msg="redis error: " .. tostring(err)})
+        return resp(500, { ok = false, msg = "storage error: " .. tostring(list_err) })
     end
-    return resp(200, {ok=true, apikeys=result.items, total=result.total, page=result.page, page_size=result.page_size, total_pages=result.total_pages})
+    return resp(200, {
+        ok = true,
+        apikeys = result.items,
+        total = result.total,
+        page = result.page,
+        page_size = result.page_size,
+        total_pages = result.total_pages,
+    })
 
 elseif action == "get_apikey" then
     local api_key = req.api_key
-    local item, err = apikey_admin.get_redis(red, api_key)
-    redis_util.close(red)
-    if err == "need api_key" then
-        return resp(400, {ok=false, msg=err})
+    local item, get_err = apikey_admin.get_backend(backend, handle, api_key)
+    backend.close(handle)
+    if get_err == "need api_key" then
+        return resp(400, { ok = false, msg = get_err })
     end
-    if err == "not found" then
-        return resp(404, {ok=false, msg="apikey not found"})
+    if get_err == "not found" then
+        return resp(404, { ok = false, msg = "apikey not found" })
     end
     if not item then
-        return resp(500, {ok=false, msg="redis error: " .. tostring(err)})
+        return resp(500, { ok = false, msg = "storage error: " .. tostring(get_err) })
     end
-    return resp(200, {ok=true, apikey=item})
+    return resp(200, { ok = true, apikey = item })
 
 elseif action == "whitelist_add" then
     local ip = req.ip
     if not ip then
-        redis_util.close(red)
-        return resp(400, {ok=false, msg="need ip"})
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need ip" })
     end
-    red:sadd("whitelist:ip", ip)
-    redis_util.close(red)
-    return resp(200, {ok=true, msg="ip added to business whitelist"})
+    backend.sadd(handle, "whitelist:ip", ip)
+    backend.close(handle)
+    return resp(200, { ok = true, msg = "ip added to business whitelist" })
 
 elseif action == "whitelist_del" then
     local ip = req.ip
     if not ip then
-        redis_util.close(red)
-        return resp(400, {ok=false, msg="need ip"})
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need ip" })
     end
-    red:srem("whitelist:ip", ip)
-    redis_util.close(red)
-    return resp(200, {ok=true, msg="ip removed from business whitelist"})
+    backend.srem(handle, "whitelist:ip", ip)
+    backend.close(handle)
+    return resp(200, { ok = true, msg = "ip removed from business whitelist" })
 
 elseif action == "whitelist_list" then
-    local ips, err = red:smembers("whitelist:ip")
-    redis_util.close(red)
-    if err then
-        return resp(500, {ok=false, msg="redis error"})
+    local ips, list_err = backend.smembers(handle, "whitelist:ip")
+    backend.close(handle)
+    if list_err then
+        return resp(500, { ok = false, msg = "storage error" })
     end
-    return resp(200, {ok=true, whitelist=ips})
+    return resp(200, { ok = true, whitelist = ips })
 
 elseif action == "admin_whitelist_add" then
     local ip = req.ip
     if not ip then
-        redis_util.close(red)
-        return resp(400, {ok=false, msg="need ip"})
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need ip" })
     end
-    red:sadd("admin:whitelist:ip", ip)
-    redis_util.close(red)
-    return resp(200, {ok=true, msg="ip added to admin whitelist"})
+    backend.sadd(handle, "admin:whitelist:ip", ip)
+    backend.close(handle)
+    return resp(200, { ok = true, msg = "ip added to admin whitelist" })
 
 elseif action == "admin_whitelist_del" then
     local ip = req.ip
     if not ip then
-        redis_util.close(red)
-        return resp(400, {ok=false, msg="need ip"})
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need ip" })
     end
-    red:srem("admin:whitelist:ip", ip)
-    redis_util.close(red)
-    return resp(200, {ok=true, msg="ip removed from admin whitelist"})
+    backend.srem(handle, "admin:whitelist:ip", ip)
+    backend.close(handle)
+    return resp(200, { ok = true, msg = "ip removed from admin whitelist" })
 
 elseif action == "admin_whitelist_list" then
-    local ips, err = red:smembers("admin:whitelist:ip")
-    redis_util.close(red)
-    if err then
-        return resp(500, {ok=false, msg="redis error"})
+    local ips, list_err = backend.smembers(handle, "admin:whitelist:ip")
+    backend.close(handle)
+    if list_err then
+        return resp(500, { ok = false, msg = "storage error" })
     end
-    return resp(200, {ok=true, admin_whitelist=ips})
+    return resp(200, { ok = true, admin_whitelist = ips })
 
 elseif action == "hmac_test" then
-    redis_util.close(red)
+    backend.close(handle)
     return resp(200, {
         ok = true,
         msg = "hmac verified",
         client_ip = client_ip,
         ts = ts,
         nonce = nonce,
+        storage = store_mod.name(),
     })
 
 else
-    redis_util.close(red)
-    return resp(400, {ok=false, msg="unknown action"})
+    backend.close(handle)
+    return resp(400, { ok = false, msg = "unknown action" })
 end

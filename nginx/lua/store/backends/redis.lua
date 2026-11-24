@@ -34,6 +34,10 @@ function _M.set(store, key, value)
     return store._red:set(key, value)
 end
 
+function _M.setex(store, key, value, ttl_sec)
+    return store._red:setex(key, ttl_sec, value)
+end
+
 function _M.del(store, key)
     return store._red:del(key)
 end

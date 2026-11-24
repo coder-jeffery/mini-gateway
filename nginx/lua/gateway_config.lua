@@ -28,6 +28,10 @@ function _M.redis_port()
     return tonumber(env("GATEWAY_REDIS_PORT", "6379")) or 6379
 end
 
+function _M.admin_hmac_secret()
+    return env("GATEWAY_ADMIN_SECRET", "admin-secret-2026")
+end
+
 function _M.bootstrap_defaults()
     return {
         api_key = env("DEFAULT_API_KEY", "mini-key"),
