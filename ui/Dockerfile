@@ -12,6 +12,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+# Runtime GATEWAY_ADMIN_URL is set by docker-compose (Docker DNS: openresty).
 ENV GATEWAY_ADMIN_URL=http://openresty:8080/admin/gw/v1
 ENV GATEWAY_ADMIN_SECRET=admin-secret-2026
 

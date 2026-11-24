@@ -422,8 +422,6 @@ gateway_start_openresty() {
 
 # Phase 3: Admin UI container (profile ui)
 gateway_start_ui() {
-  gateway_require_openresty_ready
-
   local ui_port="${UI_PORT:-3000}"
 
   if docker inspect -f '{{.State.Running}}' gw-ui 2>/dev/null | grep -q true; then
@@ -436,9 +434,9 @@ gateway_start_ui() {
 
   gateway_normalize_container gw-ui
   gateway_ensure_port_free "$ui_port" gw-ui
-  compose_run --profile ui up -d --build ui
+  compose_run --profile ui up -d --build --wait ui
   assert_container_running gw-ui
-  wait_http "http://127.0.0.1:${ui_port}/" || die "admin UI not ready on :${ui_port} (docker logs gw-ui)"
+  wait_http "http://127.0.0.1:${ui_port}/" 60 || die "admin UI not ready on :${ui_port} (docker logs gw-ui)"
   log "admin UI is ready on :${ui_port}"
 }
 

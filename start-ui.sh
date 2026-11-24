@@ -12,8 +12,8 @@ source "$ROOT/start.sh"
 
 gateway_require_docker
 
-printf '[start-ui] checking gateway...\n'
-gateway_require_openresty_ready
+printf '[start-ui] ensuring gateway is up...\n'
+gateway_start_openresty
 
 printf '[start-ui] starting gw-ui...\n'
 gateway_start_ui
