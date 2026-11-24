@@ -7,6 +7,9 @@ local storage_circuit = require "storage_circuit"
 local config_cache = require "config_cache"
 local policy = require "data_plane_policy"
 local metrics = require "gateway_metrics"
+local business_hmac = require "business_hmac"
+local rate_warmup = require "rate_warmup"
+local leaky_bucket = require "leaky_bucket"
 local cjson = require "cjson"
 local ngx = ngx
 
@@ -133,14 +136,25 @@ if identity.use_apikey_store then
         return deny(401, "invalid api key")
     end
 
+    local bh_ok, bh_msg = business_hmac.verify(api_key, backend, handle)
+    if not bh_ok then
+        storage_circuit.record_success()
+        backend.close(handle)
+        metrics.incr("business_hmac_failures_total")
+        return deny(401, bh_msg or "business hmac failed")
+    end
+
     local meta, err_meta = config_cache.apikey_meta(api_key, backend, handle)
     if err_meta then
         backend.close(handle)
         ngx.log(ngx.ERR, "storage hmget err: ", err_meta)
         return storage_fail()
     end
-    rate_limit = tonumber(meta[1]) or DEFAULT_RATE_LIMIT
-    rate_window = tonumber(meta[2]) or DEFAULT_RATE_WINDOW
+    local meta_tbl = config_cache.meta_table_from_hmget(meta)
+    rate_limit = tonumber(meta_tbl.limit) or DEFAULT_RATE_LIMIT
+    rate_window = tonumber(meta_tbl.window) or DEFAULT_RATE_WINDOW
+    rate_limit = rate_warmup.effective_limit(rate_limit, meta_tbl)
+    ngx.header["X-RateLimit-Warmup-Limit"] = rate_limit
 end
 
 identity.rate_key = policy.build_rate_key(identity.rate_key, identity.api_key, ip)
@@ -203,6 +217,13 @@ if gcap then
         ngx.header["Retry-After"] = reset_ts - math.ceil(ngx.now())
         return deny(429, "too many requests, global rate limited")
     end
+end
+
+if not leaky_bucket.allow(identity.rate_key) then
+    storage_circuit.record_success()
+    backend.close(handle)
+    ngx.header["Retry-After"] = "1"
+    return deny(429, "leaky bucket full")
 end
 
 local now = ngx.now()

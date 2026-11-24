@@ -84,24 +84,47 @@ function _M.apikey_exists(api_key, backend, handle)
     return exist, nil
 end
 
+local META_FIELDS = {
+    "limit", "window", "created_at", "warmup_start_limit", "warmup_ramp_sec", "hmac_required",
+}
+
 function _M.apikey_meta(api_key, backend, handle)
     if not _M.enabled() then
-        return backend.hmget(handle, "apikey:meta:" .. api_key, "limit", "window")
+        return backend.hmget(handle, "apikey:meta:" .. api_key, unpack(META_FIELDS))
     end
     local ck = "cache:apikey:meta:" .. api_key
     local cached = cache_get(ck)
     if cached then
         local ok, t = pcall(cjson.decode, cached)
         if ok and type(t) == "table" then
-            return { t.limit, t.window }, nil
+            local arr = {}
+            for i, f in ipairs(META_FIELDS) do
+                arr[i] = t[f]
+            end
+            return arr, nil
         end
     end
-    local meta, err = backend.hmget(handle, "apikey:meta:" .. api_key, "limit", "window")
+    local meta, err = backend.hmget(handle, "apikey:meta:" .. api_key, unpack(META_FIELDS))
     if err then
         return nil, err
     end
-    cache_set(ck, cjson.encode({ limit = meta[1], window = meta[2] }), config.config_cache_ttl_sec())
+    local obj = {}
+    for i, f in ipairs(META_FIELDS) do
+        obj[f] = meta[i]
+    end
+    cache_set(ck, cjson.encode(obj), config.config_cache_ttl_sec())
     return meta, nil
+end
+
+function _M.meta_table_from_hmget(meta)
+    local obj = {}
+    if not meta then
+        return obj
+    end
+    for i, f in ipairs(META_FIELDS) do
+        obj[f] = meta[i]
+    end
+    return obj
 end
 
 function _M.whitelist_member(ip, backend, handle)

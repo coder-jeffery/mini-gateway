@@ -156,8 +156,18 @@ if action == "upsert_apikey" then
         backend.close(handle)
         return resp(400, { ok = false, msg = "need api_key, limit, window" })
     end
+    local now = ngx.now()
     backend.set(handle, "apikey:" .. api_key, "1")
-    backend.hset(handle, "apikey:meta:" .. api_key, "limit", limit, "window", window)
+    backend.hset(
+        handle,
+        "apikey:meta:" .. api_key,
+        "limit", limit,
+        "window", window,
+        "created_at", now,
+        "warmup_start_limit", tonumber(req.warmup_start_limit) or 1,
+        "warmup_ramp_sec", tonumber(req.warmup_ramp_sec) or 0,
+        "hmac_required", (req.hmac_required and "1" or "0")
+    )
     apikey_admin.index_add_backend(backend, handle, api_key)
     return finish_mutate(handle, 200, { ok = true, msg = "apikey saved" }, action, req)
 
