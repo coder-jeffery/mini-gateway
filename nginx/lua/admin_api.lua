@@ -3,6 +3,7 @@ local cjson = require "cjson"
 local ngx = ngx
 local apikey_admin = require "apikey_admin"
 local redact = require "log_redact"
+local admin_audit = require "admin_audit"
 
 local function resp(code, data)
     ngx.status = code
@@ -91,6 +92,7 @@ if action == "upsert_apikey" then
     backend.set(handle, "apikey:" .. api_key, "1")
     backend.hset(handle, "apikey:meta:" .. api_key, "limit", limit, "window", window)
     apikey_admin.index_add_backend(backend, handle, api_key)
+    admin_audit.emit("bearer:" .. redact.mask_credential(token or ""), client_ip, action, req)
     backend.close(handle)
     return resp(200, {ok=true, msg="apikey saved"})
 
@@ -103,6 +105,7 @@ elseif action == "del_apikey" then
     backend.del(handle, "apikey:" .. api_key)
     backend.del(handle, "apikey:meta:" .. api_key)
     apikey_admin.index_del_backend(backend, handle, api_key)
+    admin_audit.emit("bearer:" .. redact.mask_credential(token or ""), client_ip, action, req)
     backend.close(handle)
     return resp(200, {ok=true, msg="apikey deleted"})
 

@@ -64,3 +64,8 @@ if not host_header or host_header == "" then
     host_header = peers[1] and peers[1].host or ""
 end
 ngx.var.gateway_upstream_host = host_header
+
+local ok_gray, gray = pcall(require, "gray_routing")
+if ok_gray and gray and gray.apply then
+    gray.apply()
+end

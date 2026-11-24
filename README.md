@@ -71,7 +71,11 @@ flowchart LR
 | 访问日志 api_key / subject **脱敏** | ✅ |
 | Prometheus `GET /metrics` | ✅ |
 | 存储 **错误率熔断**（半开）+ `pass`/`reject` 降级 | ✅ env 可配 |
-| 灰度路由、多维度限流 | ❌ P2+ |
+| 管理操作 **审计**（`audit_list`） | ✅ |
+| shared_dict **配置缓存** | ✅ `GATEWAY_CONFIG_CACHE` |
+| 多维度 / 路由 / 全局限流、URI·UA 拦截、日志采样 | ✅ P2 env + admin |
+| 灰度标头（`X-Gray-Tag`）、配置快照 | ✅ P3 基础 |
+| Header 改写、RBAC、WebSocket/AI 等 | ❌ P3+/P4 |
 
 契约与示例：[postman/](./postman/) · 运维手册：[operation-doc.md](./operation-doc.md)
 

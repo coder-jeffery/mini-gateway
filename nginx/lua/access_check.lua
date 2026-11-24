@@ -4,6 +4,9 @@ local store_mod = require "store"
 local config = require "gateway_config"
 local oauth = require "oauth_validate"
 local storage_circuit = require "storage_circuit"
+local config_cache = require "config_cache"
+local policy = require "data_plane_policy"
+local metrics = require "gateway_metrics"
 local cjson = require "cjson"
 local ngx = ngx
 
@@ -106,12 +109,19 @@ end
 
 ngx.header["X-Gateway-Storage"] = store_mod.name()
 
+local block_status, block_msg = policy.check_security(backend, handle)
+if block_status then
+    storage_circuit.record_success()
+    backend.close(handle)
+    return deny(block_status, block_msg)
+end
+
 local rate_limit = identity.limit
 local rate_window = identity.window
 
 if identity.use_apikey_store then
     local api_key = identity.api_key
-    local key_exist, err_exists = backend.exists(handle, "apikey:" .. api_key)
+    local key_exist, err_exists = config_cache.apikey_exists(api_key, backend, handle)
     if err_exists then
         backend.close(handle)
         ngx.log(ngx.ERR, "storage exists err: ", err_exists)
@@ -123,7 +133,7 @@ if identity.use_apikey_store then
         return deny(401, "invalid api key")
     end
 
-    local meta, err_meta = backend.hmget(handle, "apikey:meta:" .. api_key, "limit", "window")
+    local meta, err_meta = config_cache.apikey_meta(api_key, backend, handle)
     if err_meta then
         backend.close(handle)
         ngx.log(ngx.ERR, "storage hmget err: ", err_meta)
@@ -133,7 +143,21 @@ if identity.use_apikey_store then
     rate_window = tonumber(meta[2]) or DEFAULT_RATE_WINDOW
 end
 
-local in_whitelist, err_wl = backend.sismember(handle, "whitelist:ip", ip)
+identity.rate_key = policy.build_rate_key(identity.rate_key, identity.api_key, ip)
+
+local identity_key = identity.api_key or ngx.ctx.auth_subject or "anon"
+local rq, rq_err = policy.route_quota(backend, handle, ngx.var.uri or "/", tostring(identity_key))
+if rq_err then
+    backend.close(handle)
+    ngx.log(ngx.ERR, "route quota err: ", rq_err)
+    return storage_fail()
+elseif rq then
+    rate_limit = rq.limit
+    rate_window = rq.window
+    identity.rate_key = rq.rate_key
+end
+
+local in_whitelist, err_wl = config_cache.whitelist_member(ip, backend, handle)
 if err_wl then
     backend.close(handle)
     ngx.log(ngx.ERR, "storage sismember err: ", err_wl)
@@ -148,6 +172,37 @@ if in_whitelist == 1 then
     ngx.header["X-RateLimit-Remaining"] = -1
     ngx.header["X-RateLimit-Reset"] = math.ceil(ngx.now() + rate_window)
     return
+end
+
+local function sliding_check(handle, limit_key, rate_limit, rate_window)
+    local now = ngx.now()
+    local unique_id = now .. ":" .. ngx.var.pid .. ":" .. math.random()
+    local cnt, err_rl = backend.sliding_window(handle, limit_key, rate_window, now, unique_id)
+    if err_rl then
+        return nil, err_rl
+    end
+    local reset_ts = math.ceil(now + rate_window)
+    if cnt >= rate_limit then
+        return false, reset_ts, cnt
+    end
+    return true, reset_ts, cnt
+end
+
+local gcap, _ = policy.global_cap()
+if gcap then
+    local ok, reset_ts = sliding_check(backend, gcap.rate_key, gcap.limit, gcap.window)
+    if ok == nil then
+        backend.close(handle)
+        ngx.log(ngx.ERR, "global rate limit err")
+        return storage_fail()
+    end
+    if not ok then
+        storage_circuit.record_success()
+        backend.close(handle)
+        metrics.incr("global_rate_limit_hits_total")
+        ngx.header["Retry-After"] = reset_ts - math.ceil(ngx.now())
+        return deny(429, "too many requests, global rate limited")
+    end
 end
 
 local now = ngx.now()

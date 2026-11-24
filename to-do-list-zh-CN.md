@@ -200,10 +200,26 @@
 - [x] P1-1 错误率熔断  
 - [x] P1-2 /metrics  
 - [x] P1-3 熔断策略配置  
-- [ ] P1-4 管理审计日志  
-- [ ] P1-5 配置本地缓存  
+- [x] P1-4 管理审计日志（`admin_audit.lua` + `audit_list`）  
+- [x] P1-5 配置本地缓存（`config_cache.lua` + `gateway_config_cache`）  
 
-（P2～P4 细项见 §4，按迭代从 backlog 拉取。）
+**P2 策略（已实现 + `test_policy_p2.py` / `test_log_sample.py`）**
+
+- [x] P2-1 限流维度（`GATEWAY_RL_DIMENSION`）  
+- [x] P2-2 接口级配额（`route_quota_set`）  
+- [x] P2-3 全网关 QPS（`GATEWAY_GLOBAL_QPS_LIMIT`）  
+- [x] P2-4 URI/UA 拦截  
+- [x] P2-5 访问日志采样  
+
+**P3 部分**
+
+- [x] P3-1 灰度标头（`gray_rule_set` + `X-Gray-Tag`）  
+- [ ] P3-2 Header/URI 改写  
+- [ ] P3-3 Admin RBAC  
+- [x] P3-4 配置快照（`config_snapshot_*`）  
+- [ ] P3-5 开发者面  
+
+（P4 见 §4，按需迭代。）
 
 ---
 
