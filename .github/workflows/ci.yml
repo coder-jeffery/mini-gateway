@@ -42,29 +42,43 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install requests
-      - name: Build and start gateway (memory)
+      - name: Build and start gateway (memory + mock upstream)
+        env:
+          GATEWAY_STORAGE: memory
         run: |
-          export GATEWAY_STORAGE=memory
-          export GATEWAY_AUTH_MODE=both
-          export OAUTH2_JWT_SECRET=oauth2-dev-secret
-          export GATEWAY_UPSTREAM_PEERS=mock-upstream:80
-          export GATEWAY_UPSTREAM_SCHEME=http
-          export GATEWAY_UPSTREAM_HOST=mock-upstream
-          export GATEWAY_UPSTREAM_HEALTH_PATH=/status/200
-          export GATEWAY_UPSTREAM_HEALTH_INTERVAL=60
-          docker compose build openresty
-          docker compose --profile ci up -d mock-upstream openresty
-      - name: Wait for gateway
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml build openresty
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml --profile ci up -d --force-recreate mock-upstream openresty
+      - name: Wait for gateway and verify upstream env
         run: |
           for i in $(seq 1 30); do
             if curl -sf http://127.0.0.1:8080/health >/dev/null; then
-              exit 0
+              break
             fi
             sleep 2
           done
-          echo "gateway did not become healthy" >&2
-          docker logs gw-openresty || true
-          exit 1
+          curl -sf http://127.0.0.1:8080/health >/dev/null || {
+            echo "gateway did not become healthy" >&2
+            docker logs gw-openresty || true
+            exit 1
+          }
+          docker exec gw-openresty printenv GATEWAY_UPSTREAM_PEERS
+          docker exec gw-openresty printenv GATEWAY_UPSTREAM_SCHEME
+          test "$(docker exec gw-openresty printenv GATEWAY_UPSTREAM_PEERS)" = "mock-upstream:80"
+          test "$(docker exec gw-openresty printenv GATEWAY_UPSTREAM_SCHEME)" = "http"
+          docker exec gw-openresty sh -ce '
+            if command -v wget >/dev/null; then
+              wget -q -O - http://mock-upstream/status/200
+            elif command -v curl >/dev/null; then
+              curl -sf http://mock-upstream/status/200
+            else
+              echo "no wget/curl in openresty image" >&2
+              exit 1
+            fi
+          '
+      - name: Data plane preflight (api key → mock upstream)
+        run: |
+          curl -sf -H "X-Api-Key: mini-key" http://127.0.0.1:8080/ | head -c 200
+          echo
       - name: Python smoke tests
         env:
           GATEWAY_AUTH_MODE: both
@@ -75,4 +89,4 @@ jobs:
           python3 test/test_oauth2.py
           python3 test/test_metrics.py
       - if: always()
-        run: docker compose --profile ci down -v || true
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml --profile ci down -v || true

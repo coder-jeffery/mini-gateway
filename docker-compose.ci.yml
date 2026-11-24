@@ -1,0 +1,16 @@
+# CI overlay: in-cluster mock upstream (no external httpbin).
+# Usage: docker compose -f docker-compose.yml -f docker-compose.ci.yml --profile ci up -d
+services:
+  openresty:
+    depends_on:
+      mock-upstream:
+        condition: service_started
+    environment:
+      GATEWAY_AUTH_MODE: both
+      OAUTH2_JWT_SECRET: oauth2-dev-secret
+      GATEWAY_UPSTREAM_PEERS: mock-upstream:80
+      GATEWAY_UPSTREAM_SCHEME: http
+      GATEWAY_UPSTREAM_HOST: mock-upstream
+      GATEWAY_UPSTREAM_HEALTH_PATH: /status/200
+      GATEWAY_UPSTREAM_HEALTH_INTERVAL: "300"
+      GATEWAY_UPSTREAM_HEALTH_FAIL_THRESHOLD: "50"
