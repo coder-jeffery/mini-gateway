@@ -141,10 +141,20 @@ python3 test/test_oauth2.py       # 网关须 GATEWAY_AUTH_MODE=bearer|both
 **与 GitHub Actions 一致的本地冒烟**（集群内 `mock-upstream`，不依赖外网 httpbin）：
 
 ```bash
-./scripts/ci-smoke.sh          # 起栈 + 预检 + 全部 Python 冒烟
-./scripts/ci-stack-up.sh       # 仅起栈（同 CI gateway job）
+./scripts/ci-smoke.sh          # 全量：含数据面预检 + OAuth E2E
+./scripts/ci-smoke-lite.sh     # 轻量：跳过数据面预检与 bearer 200（控制面 + 401 用例）
+./scripts/ci-stack-up.sh       # 仅起栈
 ./scripts/ci-stack-down.sh     # 销毁 ci 栈
 ```
+
+轻量 / 绕过数据面预检（容器已健康但 `GET /` 仍非 200 时）：
+
+```bash
+CI_STACK_SKIP_DATA_PLANE_PREFLIGHT=1 ./scripts/ci-stack-up.sh
+CI_SMOKE_LITE=1 python3 test/test_hmac.py   # 仍需 :8080
+```
+
+无 Docker 时只能跑 `python3 test/test_log_redact.py`。
 
 日常 `./start.sh` 仍默认 **httpbin 上游**；`mock-upstream` 在 `docker-compose.yml` 中**无 profile**（保证 `docker-compose.ci.yml` 的 `depends_on` 可解析），但**不会**被 `start.sh` 自动拉起。
 

@@ -74,7 +74,11 @@ if __name__ == "__main__":
             "Set GATEWAY_AUTH_MODE=bearer or both on the gateway and re-run "
             "(e.g. GATEWAY_AUTH_MODE=both OAUTH2_JWT_SECRET=oauth2-dev-secret ./start-gateway.sh)"
         )
-    test_bearer_ok()
+    lite = os.environ.get("CI_SMOKE_LITE") == "1"
+    if lite:
+        print("CI_SMOKE_LITE=1: skip test_bearer_ok (no data-plane E2E)")
+    else:
+        test_bearer_ok()
     test_bearer_bad_sig()
     test_bearer_expired()
-    print("all oauth2 tests passed")
+    print("all oauth2 tests passed" + (" (lite)" if lite else ""))

@@ -28,6 +28,7 @@ services:
       retries: 30
       start_period: 5s
     environment:
+      GATEWAY_STORAGE: memory
       GATEWAY_AUTH_MODE: both
       OAUTH2_JWT_SECRET: oauth2-dev-secret
       GATEWAY_UPSTREAM_PEERS: mock-upstream:80

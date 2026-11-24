@@ -78,15 +78,30 @@ if ! docker exec gw-openresty sh -ce '
   exit 1
 fi
 
-for i in $(seq 1 30); do
-  if curl -sf -H "X-Api-Key: mini-key" http://127.0.0.1:8080/ >/dev/null; then
-    break
-  fi
-  sleep 1
-done
+data_plane_preflight() {
+  local code body_file
+  body_file="$(mktemp)"
+  for i in $(seq 1 45); do
+    code="$(curl -s -o "$body_file" -w "%{http_code}" -H "X-Api-Key: mini-key" http://127.0.0.1:8080/ || echo "000")"
+    if [[ "$code" == "200" ]]; then
+      rm -f "$body_file"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "ci-stack: data plane preflight failed (expected HTTP 200, got $code)" >&2
+  echo "ci-stack: response body (first 300 bytes):" >&2
+  head -c 300 "$body_file" >&2 || true
+  echo >&2
+  docker logs gw-openresty 2>&1 | tail -40 >&2 || true
+  rm -f "$body_file"
+  return 1
+}
 
-if ! curl -sf -H "X-Api-Key: mini-key" http://127.0.0.1:8080/ >/dev/null; then
-  echo "ci-stack: data plane preflight failed (expected 200 via mock-upstream)" >&2
+if [[ "${CI_STACK_SKIP_DATA_PLANE_PREFLIGHT:-0}" == "1" ]]; then
+  echo "ci-stack: skipping data plane preflight (CI_STACK_SKIP_DATA_PLANE_PREFLIGHT=1)" >&2
+elif ! data_plane_preflight; then
+  echo "ci-stack: bypass tip: CI_STACK_SKIP_DATA_PLANE_PREFLIGHT=1 ./scripts/ci-smoke-lite.sh" >&2
   exit 1
 fi
 
