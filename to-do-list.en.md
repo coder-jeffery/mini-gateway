@@ -213,10 +213,10 @@ Aligned with the recommended order in `develop-design.md`, plus product gaps.
 **P3 (partial)**
 
 - [x] P3-1 Gray tag header  
-- [ ] P3-2 Header/URI rewrite  
-- [ ] P3-3 Admin RBAC  
+- [x] P3-2 Header/URI rewrite  
+- [x] P3-3 Admin RBAC  
 - [x] P3-4 Config snapshot  
-- [ ] P3-5 Developer surface  
+- [x] P3-5 Developer surface (`docs/developer-portal.md`)  
 
 (P4: see §4.)
 

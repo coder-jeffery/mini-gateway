@@ -7,6 +7,7 @@ local apikey_admin = require "apikey_admin"
 local admin_audit = require "admin_audit"
 local config_cache = require "config_cache"
 local config_snapshot = require "config_snapshot"
+local admin_rbac = require "admin_rbac"
 
 local SIGN_WINDOW = 60 -- signature timestamp tolerance (seconds)
 
@@ -135,6 +136,16 @@ local action = req.action
 if not action then
     backend.close(handle)
     return resp(400, { ok = false, msg = "missing action" })
+end
+
+local v1_role, role_err = admin_rbac.v1_role(backend, handle)
+if role_err then
+    backend.close(handle)
+    return resp(500, { ok = false, msg = "storage error" })
+end
+if not admin_rbac.allows(v1_role, action) then
+    backend.close(handle)
+    return resp(403, { ok = false, msg = admin_rbac.denied_msg(action), role = v1_role })
 end
 
 if action == "upsert_apikey" then
@@ -362,6 +373,46 @@ elseif action == "config_snapshot_restore" then
         return resp(400, { ok = false, msg = tostring(rest_err) })
     end
     return finish_mutate(handle, 200, { ok = true, restored = meta }, action, req)
+
+elseif action == "rewrite_rule_set" then
+    local name = req.name
+    local match_prefix = req.match_prefix
+    if not name or not match_prefix then
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need name, match_prefix" })
+    end
+    local rule = {
+        match_prefix = match_prefix,
+        uri_prefix = req.uri_prefix,
+        match_api_key = req.match_api_key,
+        headers = req.headers,
+    }
+    backend.sadd(handle, "policy:rewrite:index", name)
+    backend.set(handle, "policy:rewrite:" .. name, cjson.encode(rule))
+    return finish_mutate(handle, 200, { ok = true, msg = "rewrite rule saved" }, action, req)
+
+elseif action == "rewrite_rule_del" then
+    local name = req.name
+    if not name then
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need name" })
+    end
+    backend.srem(handle, "policy:rewrite:index", name)
+    backend.del(handle, "policy:rewrite:" .. name)
+    return finish_mutate(handle, 200, { ok = true, msg = "rewrite rule deleted" }, action, req)
+
+elseif action == "admin_role_set" then
+    local role = req.role
+    if not role then
+        backend.close(handle)
+        return resp(400, { ok = false, msg = "need role (full_admin|operator|read_only)" })
+    end
+    backend.set(handle, "admin:rbac:v1_role", role)
+    return finish_mutate(handle, 200, { ok = true, msg = "v1 role updated", role = role }, action, req)
+
+elseif action == "admin_role_get" then
+    backend.close(handle)
+    return resp(200, { ok = true, role = v1_role })
 
 elseif action == "hmac_test" then
     backend.close(handle)

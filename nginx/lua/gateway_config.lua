@@ -269,6 +269,14 @@ function _M.global_qps_window()
     return tonumber(env("GATEWAY_GLOBAL_QPS_WINDOW", "1")) or 1
 end
 
+function _M.admin_v1_default_role()
+    local v = env("GATEWAY_ADMIN_V1_ROLE", "full_admin"):lower()
+    if v == "operator" or v == "read_only" then
+        return v
+    end
+    return "full_admin"
+end
+
 function _M.access_log_sample_rate()
     local r = tonumber(env("GATEWAY_ACCESS_LOG_SAMPLE_RATE", "1")) or 1
     if r < 0 then

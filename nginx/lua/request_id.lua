@@ -69,3 +69,8 @@ local ok_gray, gray = pcall(require, "gray_routing")
 if ok_gray and gray and gray.apply then
     gray.apply()
 end
+
+local ok_rw, rewrite = pcall(require, "request_rewrite")
+if ok_rw and rewrite and rewrite.apply then
+    rewrite.apply()
+end
