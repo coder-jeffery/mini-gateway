@@ -4,6 +4,7 @@ local ngx = ngx
 local apikey_admin = require "apikey_admin"
 local redact = require "log_redact"
 local admin_audit = require "admin_audit"
+local admin_rbac = require "admin_rbac"
 
 local function resp(code, data)
     ngx.status = code
@@ -79,6 +80,12 @@ local action = req.action
 if not action then
     backend.close(handle)
     return resp(400, {ok=false, msg="missing action"})
+end
+
+local bearer_role = admin_rbac.bearer_role(token_data)
+if not admin_rbac.allows(bearer_role, action) then
+    backend.close(handle)
+    return resp(403, {ok=false, msg=admin_rbac.denied_msg(action), role=bearer_role})
 end
 
 if action == "upsert_apikey" then
@@ -196,9 +203,14 @@ elseif action == "token_issue" then
     if ttl_sec > 0 then
         expire_at = ngx.now() + ttl_sec
     end
+    local role = req.role or "operator"
+    if role ~= "full_admin" and role ~= "operator" and role ~= "read_only" then
+        role = "operator"
+    end
     local token_info = {
         creator = creator,
-        expire_at = expire_at
+        expire_at = expire_at,
+        role = role,
     }
     backend.set(handle, "admin:token:" .. new_token, cjson.encode(token_info))
     backend.close(handle)

@@ -23,6 +23,9 @@ local MUTATING = {
     ua_block_del = true,
     gray_rule_set = true,
     gray_rule_del = true,
+    rewrite_rule_set = true,
+    rewrite_rule_del = true,
+    admin_role_set = true,
     config_snapshot_save = true,
     config_snapshot_restore = true,
 }
