@@ -315,7 +315,29 @@ compose_run() {
   fi
 
   rm -f "$compose_log"
-  die "command failed: docker compose $* — $(echo "$output" | tail -1) (try: START_VERBOSE=1 ./start.sh)"
+  local tail_lines
+  tail_lines="$(echo "$output" | tail -n 20 | tr '\n' ' ')"
+  die "command failed: docker compose $* — ${tail_lines} (try: START_VERBOSE=1 ./start-ui.sh)"
+}
+
+wait_container_healthy() {
+  local name="$1"
+  local timeout_sec="${2:-90}"
+  local deadline=$((SECONDS + timeout_sec))
+  while (( SECONDS < deadline )); do
+    local running health
+    running="$(docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null || echo false)"
+    [[ "$running" != "true" ]] && sleep 1 && continue
+    health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$name" 2>/dev/null || echo "none")"
+    if [[ "$health" == "healthy" || "$health" == "none" ]]; then
+      return 0
+    fi
+    if [[ "$health" == "unhealthy" ]]; then
+      return 1
+    fi
+    sleep 2
+  done
+  return 1
 }
 
 gateway_require_docker() {
@@ -434,8 +456,16 @@ gateway_start_ui() {
 
   gateway_normalize_container gw-ui
   gateway_ensure_port_free "$ui_port" gw-ui
-  compose_run --profile ui up -d --build --wait ui
+  gateway_require_openresty_ready
+
+  # Build only gw-ui — avoid `up --build` rebaking openresty (slow/flaky on Docker Desktop).
+  compose_run --profile ui build ui || die "UI image build failed (see output above; START_VERBOSE=1 ./start-ui.sh)"
+  compose_run --profile ui up -d --no-build ui || die "UI container start failed (docker logs gw-ui)"
+
   assert_container_running gw-ui
+  if ! wait_container_healthy gw-ui 90; then
+    die "gw-ui healthcheck failed (docker logs gw-ui)"
+  fi
   wait_http "http://127.0.0.1:${ui_port}/" 60 || die "admin UI not ready on :${ui_port} (docker logs gw-ui)"
   log "admin UI is ready on :${ui_port}"
 }

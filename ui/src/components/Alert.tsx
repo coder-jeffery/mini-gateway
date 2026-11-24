@@ -10,19 +10,17 @@ export function Alert({
   const style =
     tone === "ok"
       ? {
-          borderColor: "color-mix(in srgb, var(--success) 35%, transparent)",
           background: "var(--success-soft)",
           color: "var(--success)",
         }
       : {
-          borderColor: "color-mix(in srgb, var(--danger) 35%, transparent)",
           background: "var(--danger-soft)",
           color: "var(--danger)",
         };
 
   return (
     <p
-      className="rounded-md border px-3 py-2 text-sm"
+      className="rounded-md px-3.5 py-2.5 text-sm font-medium"
       style={style}
       role="status"
     >

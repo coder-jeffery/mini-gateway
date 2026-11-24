@@ -32,47 +32,28 @@ export function AppShell({
   return (
     <div className="ui-shell">
       <aside
-        className="flex w-[13.5rem] shrink-0 flex-col border-r"
+        className="flex w-56 shrink-0 flex-col border-r sm:w-60 lg:w-64"
         style={{
           background: "var(--bg-shell)",
-          borderColor: "color-mix(in srgb, var(--border) 30%, transparent)",
+          borderColor: "var(--border-subtle)",
         }}
       >
-        <div
-          className="border-b px-4 py-4"
-          style={{ borderColor: "rgb(255 255 255 / 0.08)" }}
-        >
-          <div className="flex items-center gap-2.5">
-            <span
-              className="flex h-9 w-9 shrink-0 items-center justify-center text-xs font-bold tracking-tighter"
-              style={{
-                borderRadius: "var(--radius)",
-                border: "1px solid color-mix(in srgb, var(--accent-bright) 50%, transparent)",
-                background: "var(--bg-shell-elevated)",
-                color: "var(--accent-bright)",
-                fontFamily: "var(--font-geist-mono), monospace",
-              }}
-            >
-              GW
-            </span>
-            <div className="min-w-0">
-              <p
-                className="text-[10px] font-semibold uppercase tracking-[0.22em]"
-                style={{ color: "var(--fg-on-shell-muted)" }}
-              >
-                Control
-              </p>
-              <p
-                className="truncate text-sm font-semibold"
-                style={{ color: "var(--fg-on-shell)" }}
-              >
-                mini-gateway
-              </p>
-            </div>
-          </div>
+        <div className="px-6 py-8">
+          <p
+            className="text-xs font-medium tracking-wide"
+            style={{ color: "var(--fg-on-shell-muted)" }}
+          >
+            控制面
+          </p>
+          <p
+            className="mt-1 text-lg font-semibold tracking-tight"
+            style={{ color: "var(--fg-on-shell)" }}
+          >
+            mini-gateway
+          </p>
         </div>
 
-        <nav className="flex flex-col gap-0.5 p-2" aria-label="Main">
+        <nav className="flex flex-col gap-0.5 px-3" aria-label="Main">
           {nav.map((item) => (
             <button
               key={item.id}
@@ -82,16 +63,16 @@ export function AppShell({
               className="ui-nav-item"
               style={{
                 color: item.active
-                  ? "var(--fg-on-shell)"
-                  : "var(--fg-on-shell-muted)",
+                  ? "var(--accent)"
+                  : "var(--fg-on-shell)",
               }}
             >
-              <span className="block text-sm font-semibold leading-tight">
+              <span className="block text-[0.9375rem] font-medium leading-snug">
                 {item.label}
               </span>
               <span
-                className="mt-1 block font-mono text-[10px] leading-snug opacity-85"
-                style={{ fontFamily: "var(--font-geist-mono), monospace" }}
+                className="mt-0.5 block text-xs leading-snug"
+                style={{ color: "var(--fg-on-shell-muted)" }}
               >
                 {item.hint}
               </span>
@@ -100,33 +81,36 @@ export function AppShell({
         </nav>
 
         <div
-          className="mt-auto border-t p-3 text-[10px]"
+          className="mt-auto border-t px-6 py-5 text-xs"
           style={{
-            borderColor: "rgb(255 255 255 / 0.08)",
+            borderColor: "var(--border-subtle)",
             color: "var(--fg-on-shell-muted)",
           }}
         >
           <div className="flex items-center gap-2">
             <span
-              className={connected ? "ui-status-led" : ""}
+              className={connected ? "ui-status-dot" : undefined}
               style={
                 connected
                   ? undefined
                   : {
-                      width: 7,
-                      height: 7,
+                      width: 8,
+                      height: 8,
                       borderRadius: "50%",
-                      background: "var(--fg-on-shell-muted)",
+                      background: "var(--border)",
                     }
               }
               aria-hidden
             />
-            <span className="font-mono" style={{ color: "var(--fg-on-shell)" }}>
-              POST /admin/gw/v1
+            <span style={{ color: "var(--fg-secondary)" }}>
+              {connected ? "网关已连接" : probing ? "连接中…" : "未连接"}
             </span>
           </div>
-          <p className="mt-1.5 pl-[15px] font-mono uppercase tracking-wider opacity-80">
-            HMAC · v1
+          <p
+            className="mt-2 font-mono text-[11px]"
+            style={{ color: "var(--fg-on-shell-muted)" }}
+          >
+            POST /admin/gw/v1 · HMAC
           </p>
         </div>
       </aside>
@@ -136,49 +120,57 @@ export function AppShell({
           className="shrink-0 border-b"
           style={{
             background: "var(--bg-surface)",
-            borderColor: "var(--border)",
+            borderColor: "var(--border-subtle)",
           }}
         >
-          <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4 sm:px-6">
+          <div
+            className="flex flex-wrap items-start justify-between gap-6"
+            style={{
+              paddingLeft: "var(--space-page-x)",
+              paddingRight: "var(--space-page-x)",
+              paddingTop: "var(--space-page-y)",
+              paddingBottom: "1.25rem",
+            }}
+          >
             <div className="min-w-0 flex-1">
-              <p
-                className="text-[10px] font-semibold uppercase tracking-[0.2em]"
-                style={{ color: "var(--fg-muted)" }}
-              >
-                网关管理控制台
-              </p>
-              <h1 className="ui-section-title mt-1">{pageTitle}</h1>
+              <h1 className="ui-section-title">{pageTitle}</h1>
               <p className="ui-section-desc">{pageDesc}</p>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2 pt-0.5">
-              {probing ? <StatusPill tone="muted" label="探测网关…" /> : null}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {probing ? <StatusChip tone="muted" label="探测中" /> : null}
               {storage ? (
-                <StatusPill tone="ok" label={`STORE · ${storage.toUpperCase()}`} />
+                <StatusChip tone="neutral" label={`存储 · ${storage}`} />
               ) : null}
               {gatewayError ? (
-                <StatusPill tone="warn" label={gatewayError} />
+                <StatusChip tone="warn" label={gatewayError} />
               ) : null}
-              {connected ? (
-                <StatusPill tone="ok" label="LINK UP" dot />
-              ) : null}
+              {connected ? <StatusChip tone="ok" label="在线" dot /> : null}
             </div>
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
-          <div className="w-full max-w-4xl">{children}</div>
+        <main
+          className="flex-1"
+          style={{
+            paddingLeft: "var(--space-page-x)",
+            paddingRight: "var(--space-page-x)",
+            paddingTop: "1.5rem",
+            paddingBottom: "var(--space-page-y)",
+          }}
+        >
+          <div className="w-full max-w-5xl">{children}</div>
         </main>
       </div>
     </div>
   );
 }
 
-function StatusPill({
+function StatusChip({
   tone,
   label,
   dot,
 }: {
-  tone: "ok" | "warn" | "muted";
+  tone: "ok" | "warn" | "muted" | "neutral";
   label: string;
   dot?: boolean;
 }) {
@@ -187,30 +179,28 @@ function StatusPill({
       ? "var(--success-soft)"
       : tone === "warn"
         ? "var(--warn-soft)"
-        : "var(--bg-muted)";
+        : tone === "neutral"
+          ? "var(--bg-muted)"
+          : "var(--bg-elevated)";
   const fg =
     tone === "ok"
       ? "var(--success)"
       : tone === "warn"
         ? "var(--warn)"
-        : "var(--fg-muted)";
+        : "var(--fg-secondary)";
   return (
     <span
-      className="inline-flex items-center gap-1.5 border px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide"
-      style={{
-        background: bg,
-        color: fg,
-        borderColor: "color-mix(in srgb, currentColor 25%, transparent)",
-        borderRadius: "var(--radius)",
-      }}
+      className="inline-flex max-w-xs items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium"
+      style={{ background: bg, color: fg }}
+      title={label.length > 24 ? label : undefined}
     >
       {dot ? (
         <span
-          className="h-1.5 w-1.5 shrink-0 rounded-full"
+          className="ui-status-dot h-1.5 w-1.5"
           style={{ background: "var(--success)" }}
         />
       ) : null}
-      {label}
+      <span className="truncate">{label}</span>
     </span>
   );
 }
