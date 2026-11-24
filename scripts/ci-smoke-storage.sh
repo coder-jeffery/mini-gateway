@@ -33,6 +33,7 @@ esac
 export COMPOSE_CI_SERVICES="${COMPOSE_SERVICES[*]}"
 "$ROOT/scripts/ci-stack-down.sh" 2>/dev/null || true
 "$ROOT/scripts/ci-stack-up.sh"
+export CI_SMOKE_SKIP_STACK_UP=1
 "$ROOT/scripts/ci-smoke-lite.sh"
 "$ROOT/scripts/ci-stack-down.sh"
 echo "ci-smoke-storage: $STORAGE OK"

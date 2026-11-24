@@ -6,7 +6,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 export CI_STACK_SKIP_DATA_PLANE_PREFLIGHT=1
-"$ROOT/scripts/ci-stack-up.sh"
+if [[ "${CI_SMOKE_SKIP_STACK_UP:-0}" != "1" ]]; then
+  # shellcheck source=scripts/lib/ci-compose.env
+  source "$ROOT/scripts/lib/ci-compose.env"
+  "$ROOT/scripts/ci-stack-up.sh"
+fi
 
 export GATEWAY_AUTH_MODE=both
 export OAUTH2_JWT_SECRET=oauth2-dev-secret

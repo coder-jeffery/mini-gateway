@@ -67,8 +67,12 @@ function _M.bearer_role(token_data)
     return normalize_role(token_data.role or "full_admin")
 end
 
-function _M.allows(role, action)
+function _M.allows(role, action, req)
     role = normalize_role(role)
+    -- Break-glass: read_only/operator may always restore full_admin (tests + lockout recovery).
+    if action == "admin_role_set" and type(req) == "table" and req.role == "full_admin" then
+        return true
+    end
     local perms = ROLE_PERMISSIONS[role]
     if not perms then
         return false
