@@ -22,7 +22,7 @@ case "$STORAGE" in
     ;;
   redis)
     export COMPOSE_CI_FILES="-f docker-compose.yml -f docker-compose.ci.yml -f docker-compose.ci-redis.yml"
-    COMPOSE_SERVICES=(mock-upstream redis openresty)
+    COMPOSE_SERVICES=(mock-upstream ci-redis openresty)
     ;;
   *)
     echo "usage: $0 memory|sqlite|redis" >&2

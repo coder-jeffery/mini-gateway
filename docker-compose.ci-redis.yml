@@ -1,9 +1,9 @@
-# CI overlay: storage=redis (embedded redis service, no compose profile).
+# CI overlay: storage=redis (dedicated ci-redis service — not the profiled `redis` service).
 services:
-  redis:
+  ci-redis:
     image: ${REDIS_IMAGE:-redis:7-alpine}
     pull_policy: if_not_present
-    container_name: gw-redis
+    container_name: gw-ci-redis
     expose:
       - "6379"
     healthcheck:
@@ -14,8 +14,11 @@ services:
 
   openresty:
     depends_on:
-      redis:
+      ci-redis:
+        condition: service_healthy
+      mock-upstream:
         condition: service_healthy
     environment:
       GATEWAY_STORAGE: redis
-      GATEWAY_REDIS_HOST: redis
+      GATEWAY_REDIS_HOST: ci-redis
+      GATEWAY_REDIS_PORT: "6379"
