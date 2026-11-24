@@ -139,30 +139,22 @@ export function ApiKeyPanel() {
   const showingForm = mode === "create" || mode === "edit";
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">API Key</h2>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          点击「新增 API Key」，列表区域切换为录入窗体；保存后恢复列表并刷新。
-        </p>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/80">
-          <span className="text-sm font-medium">
-            {showingForm
-              ? mode === "create"
-                ? "新增 API Key"
-                : "编辑 API Key"
-              : `列表（共 ${total} 条）`}
-          </span>
-          <div className="flex flex-wrap gap-2">
+    <div className="ui-panel overflow-hidden">
+      <div className="ui-panel-header">
+        <span>
+          {showingForm
+            ? mode === "create"
+              ? "新增 API Key"
+              : "编辑 API Key"
+            : `记录 · ${total} 条`}
+        </span>
+        <div className="ui-panel-header-actions">
             {showingForm ? (
               <button
                 type="button"
                 disabled={formSubmitting}
                 onClick={closeForm}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm disabled:opacity-50 dark:border-zinc-700"
+                className="ui-btn-ghost disabled:opacity-50"
               >
                 返回列表
               </button>
@@ -172,7 +164,7 @@ export function ApiKeyPanel() {
                   type="button"
                   disabled={listLoading}
                   onClick={openCreate}
-                  className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+                  className="ui-btn-primary disabled:opacity-50"
                 >
                   新增 API Key
                 </button>
@@ -180,7 +172,7 @@ export function ApiKeyPanel() {
                   type="button"
                   disabled={listLoading}
                   onClick={() => void refreshList(page)}
-                  className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm disabled:opacity-50 dark:border-zinc-700"
+                  className="ui-btn-ghost disabled:opacity-50"
                 >
                   刷新列表
                 </button>
@@ -190,7 +182,7 @@ export function ApiKeyPanel() {
         </div>
 
         {listStatus && !showingForm ? (
-          <div className="border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+          <div className="border-b border-[var(--border-subtle)] px-4 py-2">
             <Alert tone={listStatus.tone} message={listStatus.msg} />
           </div>
         ) : null}
@@ -215,7 +207,7 @@ export function ApiKeyPanel() {
                   readOnly={mode === "edit"}
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm read-only:opacity-70 dark:border-zinc-700 dark:bg-zinc-950"
+                  className="ui-input font-mono read-only:opacity-70"
                   placeholder="abc123"
                 />
               </label>
@@ -228,7 +220,7 @@ export function ApiKeyPanel() {
                     min={1}
                     value={limit}
                     onChange={(e) => setLimit(e.target.value)}
-                    className="rounded-md border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
+                    className="ui-input"
                   />
                 </label>
                 <label className="grid gap-1 text-sm">
@@ -239,25 +231,25 @@ export function ApiKeyPanel() {
                     min={1}
                     value={windowSec}
                     onChange={(e) => setWindowSec(e.target.value)}
-                    className="rounded-md border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
+                    className="ui-input"
                   />
                 </label>
               </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-2 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+            <div className="mt-6 flex items-center justify-end gap-2 border-t border-[var(--border-subtle)] pt-4">
               <button
                 type="button"
                 disabled={formSubmitting}
                 onClick={closeForm}
-                className="rounded-md border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-700"
+                className="ui-btn-ghost"
               >
                 取消
               </button>
               <button
                 type="submit"
                 disabled={formSubmitting}
-                className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+                className="ui-btn-primary disabled:opacity-50"
               >
                 {formSubmitting ? "保存中…" : "保存"}
               </button>
@@ -267,19 +259,17 @@ export function ApiKeyPanel() {
           <>
             <div className="relative">
               {listLoading ? (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 dark:bg-zinc-950/60">
-                  <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                    列表更新中…
-                  </span>
+                <div className="ui-loading-veil min-h-[8rem]">
+                  列表更新中…
                 </div>
               ) : null}
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-zinc-200 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
+              <table className="ui-table">
+                <thead>
                   <tr>
-                    <th className="px-4 py-3 font-medium">API Key</th>
-                    <th className="px-4 py-3 font-medium">Limit</th>
-                    <th className="px-4 py-3 font-medium">Window</th>
-                    <th className="px-4 py-3 font-medium w-36">操作</th>
+                    <th>API Key</th>
+                    <th>Limit</th>
+                    <th>Window</th>
+                    <th className="w-32 text-right">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -287,7 +277,8 @@ export function ApiKeyPanel() {
                     <tr>
                       <td
                         colSpan={4}
-                        className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400"
+                        className="py-10 text-center"
+                        style={{ color: "var(--fg-muted)" }}
                       >
                         {listLoading
                           ? "加载中…"
@@ -298,26 +289,25 @@ export function ApiKeyPanel() {
                     rows.map((row) => (
                       <tr
                         key={row.api_key}
-                        className="border-t border-zinc-100 dark:border-zinc-800"
+                        className=""
                       >
-                        <td className="px-4 py-3 font-mono">{row.api_key}</td>
-                        <td className="px-4 py-3">{row.limit}</td>
-                        <td className="px-4 py-3">{row.window}s</td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-3">
+                        <td className="ui-mono-data">{row.api_key}</td>
+                        <td className="ui-mono-data">{row.limit}</td>
+                        <td className="ui-mono-data">{row.window}s</td>
+                        <td className="text-right">
+                          <div className="ui-action-group">
                             <button
                               type="button"
                               disabled={listLoading}
                               onClick={() => openEdit(row)}
-                              className="text-sm hover:underline disabled:opacity-50"
                             >
                               编辑
                             </button>
                             <button
                               type="button"
                               disabled={listLoading}
+                              className="ui-action-danger"
                               onClick={() => void onDelete(row.api_key)}
-                              className="text-sm text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
                             >
                               删除
                             </button>
@@ -330,8 +320,8 @@ export function ApiKeyPanel() {
               </table>
             </div>
             {totalPages > 1 ? (
-              <div className="flex items-center justify-between border-t border-zinc-200 px-4 py-3 dark:border-zinc-800">
-                <span className="text-sm text-zinc-500">
+              <div className="flex items-center justify-between border-t border-[var(--border-subtle)] px-4 py-3">
+                <span className="text-sm" style={{ color: "var(--fg-muted)" }}>
                   第 {page} / {totalPages} 页
                 </span>
                 <div className="flex gap-2">
@@ -339,7 +329,7 @@ export function ApiKeyPanel() {
                     type="button"
                     disabled={listLoading || page <= 1}
                     onClick={() => void refreshList(page - 1)}
-                    className="rounded-md border border-zinc-300 px-3 py-1 text-sm disabled:opacity-40 dark:border-zinc-700"
+                    className="ui-btn-ghost px-3 py-1 text-sm disabled:opacity-40"
                   >
                     上一页
                   </button>
@@ -347,7 +337,7 @@ export function ApiKeyPanel() {
                     type="button"
                     disabled={listLoading || page >= totalPages}
                     onClick={() => void refreshList(page + 1)}
-                    className="rounded-md border border-zinc-300 px-3 py-1 text-sm disabled:opacity-40 dark:border-zinc-700"
+                    className="ui-btn-ghost px-3 py-1 text-sm disabled:opacity-40"
                   >
                     下一页
                   </button>
@@ -356,7 +346,6 @@ export function ApiKeyPanel() {
             ) : null}
           </>
         )}
-      </div>
     </div>
   );
 }

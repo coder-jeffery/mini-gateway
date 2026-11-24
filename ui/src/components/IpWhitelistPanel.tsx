@@ -144,28 +144,18 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
   const showingForm = panelMode === "create";
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">{cfg.title}</h2>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          {cfg.description}
-        </p>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/80">
-          <span className="text-sm font-medium">
-            {showingForm
-              ? `${cfg.addLabel} — ${cfg.title}`
-              : `列表（共 ${ips.length} 条）`}
-          </span>
-          <div className="flex flex-wrap gap-2">
+    <div className="ui-panel overflow-hidden">
+      <div className="ui-panel-header">
+        <span>
+          {showingForm ? `${cfg.addLabel}` : `记录 · ${ips.length} 条`}
+        </span>
+        <div className="ui-panel-header-actions">
             {showingForm ? (
               <button
                 type="button"
                 disabled={formSubmitting}
                 onClick={closeForm}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm disabled:opacity-50 dark:border-zinc-700"
+                className="ui-btn-ghost disabled:opacity-50"
               >
                 返回列表
               </button>
@@ -175,7 +165,7 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
                   type="button"
                   disabled={listLoading}
                   onClick={openCreate}
-                  className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+                  className="ui-btn-primary disabled:opacity-50"
                 >
                   {cfg.addLabel}
                 </button>
@@ -183,7 +173,7 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
                   type="button"
                   disabled={listLoading}
                   onClick={() => void refreshList()}
-                  className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm disabled:opacity-50 dark:border-zinc-700"
+                  className="ui-btn-ghost disabled:opacity-50"
                 >
                   刷新列表
                 </button>
@@ -193,7 +183,7 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
         </div>
 
         {listStatus && !showingForm ? (
-          <div className="border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+          <div className="border-b border-[var(--border-subtle)] px-4 py-2">
             <Alert tone={listStatus.tone} message={listStatus.msg} />
           </div>
         ) : null}
@@ -218,24 +208,19 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
                   value={newIp}
                   onChange={(e) => setNewIp(e.target.value)}
                   placeholder="127.0.0.1"
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                  className="ui-input font-mono"
                 />
               </label>
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-2 border-t border-zinc-100 pt-4 dark:border-zinc-800">
-              <button
-                type="button"
-                disabled={formSubmitting}
-                onClick={closeForm}
-                className="rounded-md border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-700"
-              >
+            <div className="mt-6 flex items-center justify-end gap-2 border-t border-[var(--border-subtle)] pt-4">
+              <button type="button" disabled={formSubmitting} onClick={closeForm} className="ui-btn-ghost">
                 取消
               </button>
               <button
                 type="submit"
                 disabled={formSubmitting}
-                className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+                className="ui-btn-primary disabled:opacity-50"
               >
                 {formSubmitting ? "保存中…" : "保存"}
               </button>
@@ -244,17 +229,13 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
         ) : (
           <div className="relative">
             {listLoading ? (
-              <div className="absolute inset-0 z-10 flex min-h-[120px] items-center justify-center bg-white/60 dark:bg-zinc-950/60">
-                <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                  列表更新中…
-                </span>
-              </div>
+              <div className="ui-loading-veil min-h-[7.5rem]">列表更新中…</div>
             ) : null}
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-zinc-200 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
+            <table className="ui-table">
+              <thead>
                 <tr>
-                  <th className="px-4 py-3 font-medium">IP</th>
-                  <th className="px-4 py-3 font-medium w-28">操作</th>
+                  <th>IP 地址</th>
+                  <th className="w-28 text-right">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -262,7 +243,8 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
                   <tr>
                     <td
                       colSpan={2}
-                      className="px-4 py-10 text-center text-zinc-500 dark:text-zinc-400"
+                      className="py-10 text-center"
+                      style={{ color: "var(--fg-muted)" }}
                     >
                       {listLoading
                         ? "加载中…"
@@ -273,18 +255,19 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
                   ips.map((ip) => (
                     <tr
                       key={ip}
-                      className="border-t border-zinc-100 dark:border-zinc-800"
                     >
-                      <td className="px-4 py-3 font-mono">{ip}</td>
-                      <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          disabled={listLoading}
-                          onClick={() => void onRemove(ip)}
-                          className="text-sm text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
-                        >
-                          移除
-                        </button>
+                      <td className="ui-mono-data">{ip}</td>
+                      <td className="text-right">
+                        <div className="ui-action-group inline-flex">
+                          <button
+                            type="button"
+                            disabled={listLoading}
+                            className="ui-action-danger"
+                            onClick={() => void onRemove(ip)}
+                          >
+                            移除
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -293,7 +276,6 @@ export function IpWhitelistPanel({ mode }: { mode: Mode }) {
             </table>
           </div>
         )}
-      </div>
     </div>
   );
 }

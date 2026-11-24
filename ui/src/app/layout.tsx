@@ -13,14 +13,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mini Gateway Admin",
-  description: "Manage API keys and IP whitelists for mini-gateway",
+  title: "mini-gateway · 控制面",
+  description: "mini-gateway 控制面 — API Key、白名单、审计与策略",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="en"
+      lang="zh-CN"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
