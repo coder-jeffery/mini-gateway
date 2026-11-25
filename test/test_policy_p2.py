@@ -19,6 +19,20 @@ GATEWAY = os.environ.get("GATEWAY_URL", "http://127.0.0.1:8080")
 API_KEY = os.environ.get("DEFAULT_API_KEY", "mini-key")
 
 
+def ensure_default_api_key() -> None:
+    """Redis CI has no redis sidecar bootstrap script; worker bootstrap may race tests."""
+    st, data = post_admin_v1(
+        signed_payload(
+            "upsert_apikey",
+            api_key=API_KEY,
+            limit=int(os.environ.get("DEFAULT_API_KEY_LIMIT", "1000")),
+            window=int(os.environ.get("DEFAULT_API_KEY_WINDOW", "60")),
+        )
+    )
+    if st != 200 or not data.get("ok"):
+        raise SystemExit(f"ensure_default_api_key: {st} {data}")
+
+
 def gateway_get(path: str, headers: dict | None = None) -> tuple[int, str]:
     hdrs = {"X-Api-Key": API_KEY}
     if headers:
@@ -80,6 +94,7 @@ def test_ua_block() -> None:
 
 
 def main() -> None:
+    ensure_default_api_key()
     test_uri_block()
     test_route_quota()
     test_ua_block()

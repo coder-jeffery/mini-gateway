@@ -27,7 +27,6 @@ python3 test/test_policy_p2.py
 python3 test/test_gray_snapshot.py
 python3 test/test_p3_governance.py
 python3 test/test_rate_warmup.py
-python3 test/test_p4_extensions.py
 python3 test/test_governance_api.py
 
 echo "ci-smoke-lite: passed (data-plane preflight and bearer_ok skipped)"

@@ -21,6 +21,7 @@ local function open_db()
     end
     db:exec([[
         PRAGMA journal_mode=WAL;
+        PRAGMA busy_timeout=5000;
         CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS hash (
             hk TEXT NOT NULL, field TEXT NOT NULL, v TEXT NOT NULL,
@@ -245,10 +246,14 @@ function _M.admin_audit_list(store, limit)
     if limit > 200 then
         limit = 200
     end
-    local stmt = db(store):prepare(
-        "SELECT v FROM admin_audit ORDER BY id DESC LIMIT ?"
+    local sql = string.format(
+        "SELECT v FROM admin_audit ORDER BY id DESC LIMIT %d",
+        math.floor(limit)
     )
-    stmt:bind_values(limit)
+    local stmt = db(store):prepare(sql)
+    if not stmt then
+        return nil, "audit_list prepare failed"
+    end
     local out = {}
     while stmt:step() == lsqlite3.ROW do
         out[#out + 1] = stmt:get_value(0)
