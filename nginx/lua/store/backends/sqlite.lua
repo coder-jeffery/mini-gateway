@@ -31,7 +31,6 @@ end
 
 local function open_db()
     if db_cache then
-        ensure_schema(db_cache)
         return db_cache, nil
     end
     local ok, mod = pcall(require, "lsqlite3")
