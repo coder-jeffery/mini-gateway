@@ -46,6 +46,16 @@ services:
       dockerfile: Dockerfile
     image: gw-openresty:local
     container_name: gw-openresty
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:8080/health 2>/dev/null | grep -q healthy",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     environment:
@@ -97,12 +107,24 @@ services:
     image: gw-ui:local
     container_name: gw-ui
     depends_on:
-      - openresty
+      openresty:
+        condition: service_healthy
     ports:
       - "${UI_PORT:-3000}:3000"
     environment:
-      PORT: ${UI_PORT:-3000}
+      # Container always listens on 3000; host mapping uses UI_PORT.
+      PORT: "3000"
       HOSTNAME: 0.0.0.0
       GATEWAY_ADMIN_URL: ${GATEWAY_ADMIN_URL:-http://openresty:8080/admin/gw/v1}
       GATEWAY_ADMIN_SECRET: ${GATEWAY_ADMIN_SECRET:-admin-secret-2026}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"require('http').get('http://127.0.0.1:3000/',(r)=>{r.resume();process.exit(r.statusCode&&r.statusCode<400?0:1)}).on('error',()=>process.exit(1))\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 45s
     restart: always

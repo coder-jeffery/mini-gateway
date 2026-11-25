@@ -1,127 +1,129 @@
 # mini-gateway
 
-OpenResty 上的轻量级 API 网关：**鉴权、滑动窗口限流、IP 白名单、可配置上游、管理 API 与 Web UI**。适合学习或小团队 MVP；详细路线图见 [to-do-list-zh-CN.md](./to-do-list-zh-CN.md)。
+**English (default)** · [简体中文](./README.zh-CN.md)
+
+A lightweight API gateway on OpenResty: **auth, sliding-window rate limits, IP allowlists, configurable upstreams, admin API, and web UI**. Good for learning or small-team MVPs. See the roadmap in [to-do-list.en.md](./to-do-list.en.md).
 
 ---
 
-## 架构
+## Architecture
 
 ```mermaid
 flowchart LR
   subgraph clients [Clients]
-    B[业务调用方]
-    A[管理员 / UI / CI]
+    B[Business callers]
+    A[Admins / UI / CI]
   end
 
-  subgraph data_plane [数据面 OpenResty]
+  subgraph data_plane [Data plane OpenResty]
     GW[access_check / oauth_validate]
-    RL[滑动窗口限流]
+    RL[Sliding window limits]
     BAL[upstream_balancer]
-    LOG[log_access 脱敏]
+    LOG[log_access redaction]
   end
 
-  subgraph control_plane [控制面]
+  subgraph control_plane [Control plane]
     V0["/admin/gw Bearer"]
     V1["/admin/gw/v1 HMAC"]
-    STORE[(store 抽象)]
+    STORE[(store abstraction)]
   end
 
-  subgraph mgmt [管理面]
+  subgraph mgmt [Management]
     UI[Next.js UI]
   end
 
-  subgraph backends [存储后端]
+  subgraph backends [Storage backends]
     MEM[memory]
     RED[redis]
     SQL[sqlite]
   end
 
   B -->|X-Api-Key / Bearer| GW
-  GW --> RL --> BAL --> UP[上游服务]
+  GW --> RL --> BAL --> UP[Upstream]
   GW --> LOG --> STORE
   A --> V0 --> STORE
   A --> V1 --> STORE
-  UI -->|服务端 HMAC| V1
+  UI -->|Server-side HMAC| V1
   STORE --> MEM
   STORE --> RED
   STORE --> SQL
 ```
 
-| 面 | 职责 | 仓库落点 |
-|----|------|----------|
-| 数据面 | 转发、鉴权、限流 | `nginx/lua/access_check.lua`、`oauth_validate.lua` |
-| 控制面 | Key / 白名单 CRUD | `admin_api.lua`、`admin_api_v1.lua`、`store/*` |
-| 管理面 | 控制台 | `ui/` |
-| 观测面 | 访问日志、Request ID | `log_access.lua`（凭证脱敏） |
+| Plane | Role | Code |
+|-------|------|------|
+| Data | Proxy, auth, rate limits | `nginx/lua/access_check.lua`, `oauth_validate.lua` |
+| Control | Key / allowlist CRUD | `admin_api.lua`, `admin_api_v1.lua`, `store/*` |
+| Management | Console | `ui/` |
+| Observability | Access logs, request ID | `log_access.lua` (credential redaction) |
 
 ---
 
-## 能力矩阵（当前 MVP）
+## Capability matrix (current MVP)
 
-| 能力 | 状态 |
-|------|------|
-| API Key + OAuth2 JWT（HS256/RS256） | ✅ |
-| 滑动窗口限流、按 Key 配额 | ✅ |
-| 业务 / 管理 IP 白名单 | ✅ |
-| 存储 memory / redis / sqlite | ✅ |
-| 管理 v0 Bearer + v1 HMAC（**统一 store**） | ✅ |
-| 上游多 peer 健康检查与负载均衡 | ✅ |
-| `/health`、`/ready` | ✅ |
-| Web 管理台（全存储模式） | ✅ |
-| 访问日志 api_key / subject **脱敏** | ✅ |
+| Capability | Status |
+|------------|--------|
+| API Key + OAuth2 JWT (HS256/RS256) | ✅ |
+| Sliding-window limits, per-key quotas | ✅ |
+| Business / admin IP allowlists | ✅ |
+| Storage: memory / redis / sqlite | ✅ |
+| Admin v0 Bearer + v1 HMAC (**shared store**) | ✅ |
+| Multi-peer upstream health checks & LB | ✅ |
+| `/health`, `/ready` | ✅ |
+| Web admin UI (all storage modes) | ✅ |
+| Access log api_key / subject **redaction** | ✅ |
 | Prometheus `GET /metrics` | ✅ |
-| 存储 **错误率熔断**（半开）+ `pass`/`reject` 降级 | ✅ env 可配 |
-| 管理操作 **审计**（`audit_list`） | ✅ |
-| shared_dict **配置缓存** | ✅ `GATEWAY_CONFIG_CACHE` |
-| 多维度 / 路由 / 全局限流、URI·UA 拦截、日志采样 | ✅ P2 env + admin |
-| 灰度标头、配置快照、Header/URI 改写、Admin RBAC | ✅ P3 |
-| 开发者说明 | ✅ `docs/developer-portal.md` |
-| 业务 HMAC、配额预热、漏桶限流 | ✅ P4 基础 |
-| 管理 UI：审计 / RBAC / URI 策略 | ✅ 「审计与策略」Tab |
-| 错误日志凭证 scrub | ✅ `gateway_log` |
-| CI 存储矩阵 memory/sqlite/redis | ✅ |
-| WebSocket / 带宽 / AI / 真·多 upstream 灰度 | ❌ 见 to-do |
+| Storage **error-rate circuit breaker** (half-open) + `pass`/`reject` | ✅ env |
+| Admin **audit** (`audit_list`) | ✅ |
+| shared_dict **config cache** | ✅ `GATEWAY_CONFIG_CACHE` |
+| Multi-dim / route / global limits, URI·UA blocks, log sampling | ✅ P2 env + admin |
+| Canary headers, config snapshots, Header/URI rewrite, Admin RBAC | ✅ P3 |
+| Developer guide | ✅ `docs/developer-portal.md` |
+| Business HMAC, quota warm-up, leaky-bucket limits | ✅ P4 basics |
+| Admin UI: audit / RBAC / URI policy | ✅ Governance tab |
+| Error-log credential scrub | ✅ `gateway_log` |
+| CI storage matrix memory/sqlite/redis | ✅ |
+| WebSocket / bandwidth / AI / true multi-upstream canary | ❌ see to-do |
 
-契约与示例：[postman/](./postman/) · 运维手册：[operation-doc.md](./operation-doc.md)
+Contracts & examples: [postman/](./postman/) · Operations: [operation-doc.md](./operation-doc.md)
 
 ---
 
-## 存储选型
+## Storage guide
 
-| 模式 | 适用场景 | 持久化 | 管理 UI |
-|------|----------|--------|---------|
-| **memory**（默认） | 本地开发、单测、无外部依赖 | 容器重建后丢失 | ✅ v1 HMAC |
-| **sqlite** | 单机小部署、演示落盘 | `./data/gateway.db` | ✅ |
-| **redis** | 与现有 Redis 运维体系一致、多副本共享配置 | Redis AOF/RDB | ✅ |
+| Mode | Use case | Durability | Admin UI |
+|------|----------|------------|----------|
+| **memory** (default) | Local dev, unit tests, no deps | Lost on container recreate | ✅ v1 HMAC |
+| **sqlite** | Single-node, demo persistence | `./data/gateway.db` | ✅ |
+| **redis** | Shared config across replicas | Redis AOF/RDB | ✅ |
 
 ```bash
 GATEWAY_STORAGE=memory ./start.sh
-GATEWAY_STORAGE=sqlite ./start.sh    # 需 openresty/Dockerfile 含 lsqlite3
-GATEWAY_STORAGE=redis ./start.sh     # 或 ./start-redis.sh + ./start-gateway.sh
+GATEWAY_STORAGE=sqlite ./start.sh    # OpenResty image needs lsqlite3
+GATEWAY_STORAGE=redis ./start.sh     # or ./start-redis.sh + ./start-gateway.sh
 ```
 
-Bootstrap 默认凭证：**API Key** `mini-key` · **Admin Bearer** `mini-token` · **HMAC Secret** `admin-secret-2026`（见 `.env.example`）。
+Bootstrap defaults: **API Key** `mini-key` · **Admin Bearer** `mini-token` · **HMAC Secret** `admin-secret-2026` (see `.env.example`).
 
 ---
 
-## 快速启动
+## Quick start
 
 ```bash
 cd mini-gateway
-cp .env.example .env   # 可选
+cp .env.example .env   # optional
 
-./start.sh                              # memory 网关（8080）
-./start-ui.sh                           # 管理 UI（3000，profile ui）
-./start-all.sh                          # redis + 网关 + UI 全栈
+./start.sh                              # memory gateway (:8080)
+./start-ui.sh                           # admin UI (:3000, profile ui)
+./start-all.sh                          # redis + gateway + UI
 
-# 管理台本地开发
+# Local UI dev
 cp ui/.env.example ui/.env.local
 cd ui && npm install && npm run dev
 ```
 
-Docker 服务：`gw-openresty`（8080）、可选 `gw-redis`（6379）、可选 `gw-ui`（3000）。端口见 `.env` 中 `GATEWAY_PORT` / `UI_PORT` / `REDIS_PORT`。
+Docker services: `gw-openresty` (8080), optional `gw-redis` (6379), optional `gw-ui` (3000). Ports: `GATEWAY_PORT` / `UI_PORT` / `REDIS_PORT` in `.env`.
 
-### 探活
+### Health checks
 
 ```bash
 curl -s http://127.0.0.1:8080/health
@@ -129,80 +131,81 @@ curl -s http://127.0.0.1:8080/ready
 curl -s http://127.0.0.1:8080/metrics | head
 ```
 
-存储熔断（`GATEWAY_STORAGE_CB_*`）默认 **10s 窗口、50% 错误率、最少 5 次采样** 后打开；冷却 **30s** 进入半开。降级策略 `GATEWAY_STORAGE_CB_POLICY=pass|reject`（兼容旧名 `GATEWAY_CIRCUIT_BREAK_POLICY`）。响应头 `X-Storage-Circuit-State`：`closed` / `open` / `half_open`。
+Storage circuit breaker (`GATEWAY_STORAGE_CB_*`): default **10s window, 50% error rate, min 5 samples** before open; **30s** cooldown to half-open. Policy `GATEWAY_STORAGE_CB_POLICY=pass|reject` (legacy `GATEWAY_CIRCUIT_BREAK_POLICY`). Header `X-Storage-Circuit-State`: `closed` / `open` / `half_open`.
 
-### 业务流量（原样转发路径）
+### Business traffic (path passthrough)
 
 ```bash
 curl -i -H "X-Api-Key: mini-key" http://127.0.0.1:8080/get
 ```
 
-默认透传客户端 URI；固定上游路径时设置 `GATEWAY_UPSTREAM_PATH`（见 [operation-doc.md](./operation-doc.md)）。
+Client URI is forwarded as-is by default; set `GATEWAY_UPSTREAM_PATH` for a fixed upstream path (see [operation-doc.md](./operation-doc.md)).
 
-### 自动化测试
-
-```bash
-python3 test/test_log_redact.py   # 脱敏规则（无网关）
-python3 test/test_hmac.py         # 需网关 listening :8080
-python3 test/test_oauth2.py       # 网关须 GATEWAY_AUTH_MODE=bearer|both
-```
-
-**与 GitHub Actions 一致的本地冒烟**（集群内 `mock-upstream`，不依赖外网 httpbin）：
+### Automated tests
 
 ```bash
-./scripts/ci-smoke.sh          # 全量：含数据面预检 + OAuth E2E
-./scripts/ci-smoke-lite.sh     # 轻量：跳过数据面预检与 bearer 200（控制面 + 401 用例）
-./scripts/ci-stack-up.sh       # 仅起栈
-./scripts/ci-stack-down.sh     # 销毁 ci 栈
+python3 test/test_log_redact.py   # redaction rules (no gateway)
+python3 test/test_hmac.py         # gateway on :8080
+python3 test/test_oauth2.py       # GATEWAY_AUTH_MODE=bearer|both
 ```
 
-轻量 / 绕过数据面预检（容器已健康但 `GET /` 仍非 200 时）：
+**Local smoke aligned with GitHub Actions** (in-cluster `mock-upstream`, no public httpbin):
+
+```bash
+./scripts/ci-smoke.sh          # full: data-plane preflight + OAuth E2E
+./scripts/ci-smoke-lite.sh     # lite: skip data-plane preflight & bearer 200
+./scripts/ci-stack-up.sh       # start stack only
+./scripts/ci-stack-down.sh     # tear down ci stack
+```
+
+Lite / skip data-plane preflight when containers are healthy but `GET /` ≠ 200:
 
 ```bash
 CI_STACK_SKIP_DATA_PLANE_PREFLIGHT=1 ./scripts/ci-stack-up.sh
-CI_SMOKE_LITE=1 python3 test/test_hmac.py   # 仍需 :8080
+CI_SMOKE_LITE=1 python3 test/test_hmac.py   # still needs :8080
 ```
 
-无 Docker 时只能跑 `python3 test/test_log_redact.py`。
+Without Docker, only `python3 test/test_log_redact.py` runs offline.
 
-日常 `./start.sh` 仍默认 **httpbin 上游**；`mock-upstream` 在 `docker-compose.yml` 中**无 profile**（保证 `docker-compose.ci.yml` 的 `depends_on` 可解析），但**不会**被 `start.sh` 自动拉起。
+Daily `./start.sh` still defaults to **httpbin** upstream; `mock-upstream` has **no profile** in `docker-compose.yml` (so `docker-compose.ci.yml` `depends_on` resolves) but is **not** started by `./start.sh`.
 
-CI：GitHub Actions [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) 调用 `scripts/ci-stack-up.sh`（与 `ci-smoke.sh` 同源）。
-
----
-
-## 运维与安全
-
-- 访问日志字段 `api_key`、`auth_subject` 经 `log_redact.lua` 打码（形如 `mini***-key`），**不落盘完整密钥**。
-- 管理 v0 `token_list` 仅返回 **脱敏 token** 与元数据；吊销仍使用颁发时返回的完整 token（`token_revoke`）。
-- Docker 内 UI 调用 v1 时，默认 `GATEWAY_ADMIN_TRUST_PRIVATE=1` 信任私网段；生产请收紧 `admin:whitelist:ip`。
+CI: GitHub Actions [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) uses `scripts/ci-stack-up.sh` (same source as `ci-smoke.sh`).
 
 ---
 
-## 文档索引
+## Operations & security
 
-| 文档 | 用途 |
-|------|------|
-| [operation-doc.md](./operation-doc.md) | curl / OAuth / HMAC 手册 |
-| [to-do-list-zh-CN.md](./to-do-list-zh-CN.md) | MVP / P1–P4 路线图 |
-| [develop-design.md](./develop-design.md) | P2+ 详细设计参考 |
-| [ui/README.md](./ui/README.md) | 管理台环境变量与部署 |
+- Access logs redact `api_key` and `auth_subject` via `log_redact.lua` (e.g. `mini***-key`); **full secrets are not persisted**.
+- Admin v0 `token_list` returns **masked tokens** and metadata only; revoke with the full token from `token_issue` (`token_revoke`).
+- Docker UI calls v1 with default `GATEWAY_ADMIN_TRUST_PRIVATE=1` for RFC1918; tighten `admin:whitelist:ip` in production.
 
 ---
 
-## 常见问题
+## Documentation
 
-### Redis 镜像拉取失败（DaoCloud mirror 超时）
+| Doc | Purpose |
+|-----|---------|
+| [README.md](./README.md) / [README.zh-CN.md](./README.zh-CN.md) | Project overview (EN / ZH) |
+| [operation-doc.md](./operation-doc.md) | curl / OAuth / HMAC cookbook |
+| [to-do-list.en.md](./to-do-list.en.md) / [to-do-list-zh-CN.md](./to-do-list-zh-CN.md) | MVP / P1–P4 roadmap |
+| [develop-design.md](./develop-design.md) | P2+ design notes |
+| [ui/README.md](./ui/README.md) / [ui/README.zh-CN.md](./ui/README.zh-CN.md) | Admin UI env & deploy |
 
-Docker Desktop → **Settings → Docker Engine** 检查 `registry-mirrors`；或先 `docker pull redis:7-alpine` 再 `./start-redis.sh`。Compose 使用 `pull_policy: if_not_present`。
+---
 
-### OpenResty 实现提示
+## FAQ
 
-1. 鉴权限流放在 `access_by_lua`；老版本勿在 rewrite 里用 Redis cosocket。
-2. Redis 客户端须 `set_keepalive` 连接池化。
-3. `ngx.var.http_*` 为小写：`X-Api-Key` → `http_x_api_key`。
-4. 压测用 API Key 限流维度，避免单 IP 过早 429。
-5. cosocket 超时防止慢 Redis 拖死 worker。
+### Redis image pull fails (mirror timeout)
+
+Check `registry-mirrors` in Docker Desktop → **Settings → Docker Engine**, or `docker pull redis:7-alpine` then `./start-redis.sh`. Compose uses `pull_policy: if_not_present`.
+
+### OpenResty notes
+
+1. Auth and limits in `access_by_lua`; avoid Redis cosocket in rewrite on older builds.
+2. Pool Redis with `set_keepalive`.
+3. `ngx.var.http_*` is lowercase: `X-Api-Key` → `http_x_api_key`.
+4. Load-test with API Key limits, not single-IP limits, to avoid early 429s.
+5. Set cosocket timeouts so slow Redis does not stall workers.
 
 ---
 

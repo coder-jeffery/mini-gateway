@@ -143,7 +143,7 @@ if role_err then
     backend.close(handle)
     return resp(500, { ok = false, msg = "storage error" })
 end
-if not admin_rbac.allows(v1_role, action) then
+if not admin_rbac.allows(v1_role, action, req) then
     backend.close(handle)
     return resp(403, { ok = false, msg = admin_rbac.denied_msg(action), role = v1_role })
 end

@@ -63,7 +63,7 @@ Source of truth is the repo; regression via `test/`, `postman/`, `operation-doc.
 - [x] **Health:** `/health`, `/ready`
 - [x] **Upstream:** configurable peers/timeouts/Host; health checks + failover (`upstream_*`)
 - [x] **Deployment / CI:** Docker Compose scripts, `.env.example`, GitHub Actions
-- [x] **Product docs:** root `README.md` (architecture, capability matrix, storage guide)
+- [x] **Product docs:** root `README.md` (**English default**) + `README.zh-CN.md` (architecture, capability matrix, storage guide)
 
 ---
 

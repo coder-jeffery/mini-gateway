@@ -62,6 +62,8 @@ function _M.invalidate_for_action(action, req)
         if ip then
             d:delete("cache:wl:ip:" .. ip)
         end
+    elseif action == "config_snapshot_restore" then
+        d:flush_all()
     end
     bump_epoch(d)
 end

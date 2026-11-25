@@ -26,9 +26,6 @@ end
 
 function _M.bootstrap_if_needed()
     local name = config.storage_backend()
-    if name == "redis" then
-        return true, nil
-    end
     local lock = ngx.shared.gateway_store
     if not lock then
         return false, "shared dict gateway_store missing"

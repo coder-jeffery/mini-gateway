@@ -3,9 +3,6 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-# shellcheck source=scripts/lib/ci-compose.env
-source "$ROOT/scripts/lib/ci-compose.env"
-
 require_docker() {
   if ! docker info >/dev/null 2>&1; then
     cat >&2 <<'EOF'
@@ -37,6 +34,9 @@ wait_gateway_http() {
 }
 
 require_docker
+
+# shellcheck source=scripts/lib/ci-compose.env
+source "$ROOT/scripts/lib/ci-compose.env"
 
 export GATEWAY_STORAGE="${GATEWAY_STORAGE:-memory}"
 

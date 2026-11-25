@@ -22,7 +22,7 @@ case "$STORAGE" in
     ;;
   redis)
     export COMPOSE_CI_FILES="-f docker-compose.yml -f docker-compose.ci.yml -f docker-compose.ci-redis.yml"
-    COMPOSE_SERVICES=(mock-upstream redis openresty)
+    COMPOSE_SERVICES=(mock-upstream ci-redis openresty)
     ;;
   *)
     echo "usage: $0 memory|sqlite|redis" >&2
@@ -33,6 +33,7 @@ esac
 export COMPOSE_CI_SERVICES="${COMPOSE_SERVICES[*]}"
 "$ROOT/scripts/ci-stack-down.sh" 2>/dev/null || true
 "$ROOT/scripts/ci-stack-up.sh"
+export CI_SMOKE_SKIP_STACK_UP=1
 "$ROOT/scripts/ci-smoke-lite.sh"
 "$ROOT/scripts/ci-stack-down.sh"
 echo "ci-smoke-storage: $STORAGE OK"

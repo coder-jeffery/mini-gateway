@@ -7,14 +7,21 @@ export function Alert({
   tone: "ok" | "err";
   message: string;
 }) {
-  const styles =
+  const style =
     tone === "ok"
-      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-100"
-      : "border-red-500/40 bg-red-500/10 text-red-900 dark:text-red-100";
+      ? {
+          background: "var(--success-soft)",
+          color: "var(--success)",
+        }
+      : {
+          background: "var(--danger-soft)",
+          color: "var(--danger)",
+        };
 
   return (
     <p
-      className={`rounded-lg border px-3 py-2 text-sm ${styles}`}
+      className="rounded-md px-3.5 py-2.5 text-sm font-medium"
+      style={style}
       role="status"
     >
       {message}

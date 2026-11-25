@@ -1,37 +1,33 @@
-# Postman 导入
+# Postman import
 
-## 文件格式
+**English (default)** · [简体中文](./README.zh-CN.md)
 
-| 文件 | 说明 |
-|------|------|
-| [mini-gateway.postman_collection.json](./mini-gateway.postman_collection.json) | 请求集合（v2.1，可直接 Import） |
-| [mini-gateway.postman_environment.json](./mini-gateway.postman_environment.json) | 本地环境变量 |
+## Files
 
-## 导入步骤
+| File | Description |
+|------|-------------|
+| [mini-gateway.postman_collection.json](./mini-gateway.postman_collection.json) | Collection (v2.1, import as-is) |
+| [mini-gateway.postman_environment.json](./mini-gateway.postman_environment.json) | Local environment variables |
 
-1. 打开 Postman → **Import** → 拖入上述两个 JSON（或 Select Files）。
-2. 右上角 Environment 选择 **mini-gateway local**。
-3. 启动网关，例如：
+## Import steps
+
+1. Postman → **Import** → drag both JSON files (or **Select Files**).
+2. Choose environment **mini-gateway local** in the top-right.
+3. Start the gateway, for example:
    ```bash
    GATEWAY_AUTH_MODE=both OAUTH2_JWT_SECRET=oauth2-dev-secret docker compose up -d openresty
    ```
-4. 在 Collection **mini-gateway** 中依次 Send 请求。
+4. Send requests in the **mini-gateway** collection.
 
-## 集合内容
+## Collection contents
 
-**Business API (GET /)** — 业务测试接口 `GET {{gateway_base_url}}/`
+**Business API (GET /)** — `GET {{gateway_base_url}}/`
 
-- JWT valid / expired / bad signature / client_id（Pre-request 用 HS256 动态签发）
-- API Key、无凭证
+- JWT valid / expired / bad signature / client_id (Pre-request script signs HS256)
+- API Key, unauthenticated
 
 **Admin API HMAC** — `POST {{admin_gw_v1_url}}`
 
-- `hmac_test`、`whitelist_list`（Pre-request 计算 ts/nonce/sign）
+- `hmac_test`, `whitelist_list` (Pre-request computes ts/nonce/sign)
 
-JWT 与 `test/jwt_client.py` 使用相同 payload 规则；修改 `oauth2_jwt_secret`、`gateway_base_url` 等在 Environment 中即可。
-
-luaJIT
-Golang
-LLM
-Agent
-sandbox
+JWT payloads match `test/jwt_client.py`; tweak `oauth2_jwt_secret`, `gateway_base_url`, etc. in the environment.

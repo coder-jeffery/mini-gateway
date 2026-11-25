@@ -28,7 +28,9 @@ def gateway_get(path: str) -> tuple[int, dict[str, str]]:
 
 def test_rbac_read_only_cannot_delete() -> None:
     post_admin_v1(signed_payload("admin_role_set", role="full_admin"))
-    post_admin_v1(signed_payload("admin_role_set", role="read_only"))
+    st, data = post_admin_v1(signed_payload("admin_role_set", role="read_only"))
+    if st != 200:
+        raise SystemExit(f"admin_role_set read_only: {st} {data}")
     body = signed_payload("del_apikey", api_key="mini-key")
     status, data = post_admin_v1(body)
     if status != 403:

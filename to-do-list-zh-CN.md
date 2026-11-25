@@ -64,7 +64,7 @@
 - [x] **探活**：`/health`、`/ready`
 - [x] **上游**：可配置 peer/超时/Host；健康检查与 failover（`upstream_*`）
 - [x] **部署 / CI**：Docker Compose 三容器脚本链、`.env.example`、GitHub Actions
-- [x] **产品文档**：根目录 `README.md`（架构图、能力表、存储选型）
+- [x] **产品文档**：根目录 `README.md`（**英文默认**）+ `README.zh-CN.md`（架构图、能力表、存储选型）
 
 ---
 
