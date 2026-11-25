@@ -19,6 +19,7 @@ case "$STORAGE" in
   sqlite)
     export COMPOSE_CI_FILES="-f docker-compose.yml -f docker-compose.ci.yml -f docker-compose.ci-sqlite.yml"
     COMPOSE_SERVICES=(mock-upstream openresty)
+    rm -f "$ROOT/data/gateway.db" "$ROOT/data/gateway.db-wal" "$ROOT/data/gateway.db-shm"
     ;;
   redis)
     export COMPOSE_CI_FILES="-f docker-compose.yml -f docker-compose.ci.yml -f docker-compose.ci-redis.yml"
