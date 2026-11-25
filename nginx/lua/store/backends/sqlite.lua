@@ -5,8 +5,23 @@ local _M = {}
 local db_cache = nil
 local lsqlite3 = nil
 
-local function ensure_schema(db)
+local function open_db()
+    if db_cache then
+        return db_cache, nil
+    end
+    local ok, mod = pcall(require, "lsqlite3")
+    if not ok then
+        return nil, "lsqlite3 not installed (build openresty/Dockerfile for sqlite mode)"
+    end
+    lsqlite3 = mod
+    local path = config.sqlite_path()
+    local db, msg = lsqlite3.open(path)
+    if not db then
+        return nil, "sqlite open failed: " .. tostring(msg)
+    end
     db:exec([[
+        PRAGMA journal_mode=WAL;
+        PRAGMA busy_timeout=5000;
         CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS hash (
             hk TEXT NOT NULL, field TEXT NOT NULL, v TEXT NOT NULL,
@@ -27,24 +42,6 @@ local function ensure_schema(db)
             id INTEGER PRIMARY KEY AUTOINCREMENT, v TEXT NOT NULL
         );
     ]])
-end
-
-local function open_db()
-    if db_cache then
-        return db_cache, nil
-    end
-    local ok, mod = pcall(require, "lsqlite3")
-    if not ok then
-        return nil, "lsqlite3 not installed (build openresty/Dockerfile for sqlite mode)"
-    end
-    lsqlite3 = mod
-    local path = config.sqlite_path()
-    local db, msg = lsqlite3.open(path)
-    if not db then
-        return nil, "sqlite open failed: " .. tostring(msg)
-    end
-    db:exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")
-    ensure_schema(db)
     db_cache = db
     return db, nil
 end
@@ -253,15 +250,15 @@ function _M.admin_audit_list(store, limit)
         "SELECT v FROM admin_audit ORDER BY id DESC LIMIT %d",
         math.floor(limit)
     )
-    local stmt = db(store):prepare(sql)
-    if not stmt then
-        return nil, "audit_list prepare failed"
-    end
     local out = {}
-    while stmt:step() == lsqlite3.ROW do
-        out[#out + 1] = stmt:get_value(0)
+    local ok, err = pcall(function()
+        for row in db(store):nrows(sql) do
+            out[#out + 1] = row.v
+        end
+    end)
+    if not ok then
+        return nil, tostring(err)
     end
-    stmt:finalize()
     return out, nil
 end
 
